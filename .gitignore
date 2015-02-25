@@ -41,3 +41,17 @@ $RECYCLE.BIN/
 Network Trash Folder
 Temporary Items
 .apdisk
+
+oclcckvck/oclcckvck/x64/
+oclcckvck/oclcckvck/Debug/
+oclcckvck/Common/Debug/
+oclcckvck/Common/Release/
+oclcckvck/Common/x64/Debug/
+oclcckvck/Common/x64/Release/
+oclcckvck/x64/
+*.aps
+*.idb
+*.pdb
+*.sdf
+*.lib
+*.suo
