@@ -152,9 +152,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="AbstractTest.h" />
+    <ClInclude Include="AbstractAlgorithm.h" />
+    <ClInclude Include="AlgoImplementations\QubitFiveStepsCL12.h" />
+    <ClInclude Include="AlgoTest.h" />
+    <ClInclude Include="KnownConstantsProvider.h" />
+    <ClInclude Include="NonceStructs.h" />
     <ClInclude Include="QubitTest.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="StopWaitAlgorithm.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="oclcckvck.rc" />
@@ -168,8 +173,9 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="AbstractTest.cpp" />
+    <ClCompile Include="AbstractAlgorithm.cpp" />
     <ClCompile Include="oclcckvck.cpp" />
+    <ClCompile Include="QubitTest.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

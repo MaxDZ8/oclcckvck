@@ -8,14 +8,32 @@
     <Filter Include="Code">
       <UniqueIdentifier>{b00b4dd0-9281-4728-abdd-3fb50a323cd2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Code\AlgoImplementations">
+      <UniqueIdentifier>{2f223e65-bba0-4393-8c94-f71e1f63da9f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h" />
     <ClInclude Include="QubitTest.h">
       <Filter>Code</Filter>
     </ClInclude>
-    <ClInclude Include="AbstractTest.h">
+    <ClInclude Include="AbstractAlgorithm.h">
       <Filter>Code</Filter>
+    </ClInclude>
+    <ClInclude Include="AlgoTest.h">
+      <Filter>Code</Filter>
+    </ClInclude>
+    <ClInclude Include="KnownConstantsProvider.h">
+      <Filter>Code</Filter>
+    </ClInclude>
+    <ClInclude Include="NonceStructs.h">
+      <Filter>Code</Filter>
+    </ClInclude>
+    <ClInclude Include="StopWaitAlgorithm.h">
+      <Filter>Code</Filter>
+    </ClInclude>
+    <ClInclude Include="AlgoImplementations\QubitFiveStepsCL12.h">
+      <Filter>Code\AlgoImplementations</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -29,10 +47,13 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="AbstractTest.cpp">
+    <ClCompile Include="oclcckvck.cpp">
       <Filter>Code</Filter>
     </ClCompile>
-    <ClCompile Include="oclcckvck.cpp">
+    <ClCompile Include="AbstractAlgorithm.cpp">
+      <Filter>Code</Filter>
+    </ClCompile>
+    <ClCompile Include="QubitTest.cpp">
       <Filter>Code</Filter>
     </ClCompile>
   </ItemGroup>

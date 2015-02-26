@@ -55,3 +55,4 @@ oclcckvck/x64/
 *.sdf
 *.lib
 *.suo
+*.opensdf

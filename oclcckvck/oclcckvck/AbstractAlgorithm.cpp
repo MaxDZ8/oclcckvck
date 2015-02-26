@@ -3,67 +3,10 @@
  * This code is released under the MIT license.
  * For conditions of distribution and use, see the LICENSE or hit the web.
  */
-#include "AbstractTest.h"
+#include "AbstractAlgorithm.h"
 
 
-std::pair<const aubyte*, asizei> AbstractTest::GetPrecomputedConstant(PrecomputedConstant pc) {
-    const aubyte *data = nullptr;
-    asizei footprint = 0;
-    switch(pc) {
-    case pc_AES_T: {
-        if(this->aes_t_tables.size() == 0) {
-            aes_t_tables.resize(4 * 256);
-            auint *lut = aes_t_tables.data();
-            aes::RoundTableRowZero(lut);
-            for(asizei i = 0; i < 256; i++) lut[1 * 256 + i] = _rotl(lut[i],  8);
-            for(asizei i = 0; i < 256; i++) lut[2 * 256 + i] = _rotl(lut[i], 16);
-            for(asizei i = 0; i < 256; i++) lut[3 * 256 + i] = _rotl(lut[i], 24);
-        }
-        data = reinterpret_cast<const aubyte*>(aes_t_tables.data());
-        footprint = sizeof(auint) * aes_t_tables.size();
-    } break;
-    case pc_SIMD_alpha: {
-        /* The ALPHA table contains (41^n) % 257, with n [0..255]. Due to large powers, you might thing this is a huge mess but it really isn't
-        due to modulo properties. More information can be found in SIMD documentation from Ecole Normale Superieure, webpage of Gaetan Laurent,
-        you need to look for the "Full Submission Package", will end up with a file SIMD.zip, containing reference.c which explains what to do at LN121.
-        Anyway, the results of the above operations are MOSTLY 8-bit numbers. There's an exception however: alphaValue[128] is 0x0100.
-        I cut it easy and make everything a short. */
-        if(simd_alpha.size() == 0) {
-            simd_alpha.resize(256);
-            const int base = 41; 
-            int power = 1; // base^n
-            for(int loop = 0; loop < 256; loop++) {
-                simd_alpha[loop] = ashort(power);
-                power = (power * base) % 257;
-            }
-        }
-        data = reinterpret_cast<const aubyte*>(simd_alpha.data());
-        footprint = sizeof(ashort) * simd_alpha.size();
-    } break;
-    case pc_SIMD_beta: {
-        // The BETA table is very similar to ALPHA. It is built in two steps. In the first, it is basically an alpha table with a different base...
-        if(simd_beta.size() == 0) {
-            simd_beta.resize(256);
-            int base = 163;  // according to documentation, this should be "alpha^127 (respectively alpha^255 for SIMD-256)" which is not 0xA3 to me but I don't really care.
-            int power = 1; // base^n
-            for(int loop = 0; loop < 256; loop++) {
-                simd_beta[loop] = static_cast<aushort>(power);
-                power = (power * base) % 257;
-            }
-            // Now reference implementation mangles it again adding the powers of 40^n,
-            // but only in the "final" message expansion. So we need to do nothing more.
-            // For some reason the beta value table is called "yoff_b_n" in legacy kernels by lib-SPH... 
-        }
-        data = reinterpret_cast<const aubyte*>(simd_beta.data());
-        footprint = sizeof(aushort) * simd_beta.size();
-    } break;
-    }
-    if(!data) throw "Unknown precomputed constant requested.";
-    return std::make_pair(data, footprint);
-}
-
-
-void AbstractTest::PrepareResources(ResourceRequest *resources, asizei numResources, asizei hashCount) {
+void AbstractAlgorithm::PrepareResources(ResourceRequest *resources, asizei numResources, asizei hashCount) {
     for(auto res = resources; res != resources + numResources; res++) {
         if(resHandles.find(res->name) != resHandles.cend()) throw std::string("Duplicated resource name \"" + res->name + '"');
         if(res->name[0] == '$') throw "Trying to allocate a special resource, not supported.";
@@ -94,27 +37,10 @@ void AbstractTest::PrepareResources(ResourceRequest *resources, asizei numResour
         relMem.Dont();
         popLast.Dont();
     }
-
-    // Generate the special buffers. Those should really be per-device as well!
-    cl_int error;
-	asizei byteCount = 80;
-	wuData = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY, byteCount, NULL, &error);
-	if(error != CL_SUCCESS) throw std::string("OpenCL error ") + std::to_string(error) + " while trying to create wuData buffer.";
-	byteCount = 5 * sizeof(cl_uint);
-	dispatchData = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY, byteCount, NULL, &error);
-	if(error != CL_SUCCESS) throw std::string("OpenCL error ") + std::to_string(error) + " while trying to create dispatchData buffer.";
-    // The candidate buffer should really be dependant on difficulty setting but I take it easy.
-    byteCount = 1 + hashCount / (32 * 1024);
-    //! \todo pull the whole hash down so I can check mismatches
-    if(byteCount < 33) byteCount = 33;
-    byteCount *= sizeof(cl_uint);
-    nonceBufferSize = byteCount;
-    candidates = clCreateBuffer(context, CL_MEM_ALLOC_HOST_PTR, byteCount, NULL, &error);
-	if(error) throw std::string("OpenCL error ") + std::to_string(error) + " while trying to resulting nonces buffer.";
 }
 
 
-void AbstractTest::PrepareKernels(KernelRequest *kernels, asizei numKernels) {
+void AbstractAlgorithm::PrepareKernels(KernelRequest *kernels, asizei numKernels) {
     // First of all, let's build a set of unique file names. Some algorithms load up the same file more than once.
     // Those are usually very few entries so it's probably faster using an array but set is easier.
     std::map<std::string, std::string> load;
@@ -176,12 +102,12 @@ void AbstractTest::PrepareKernels(KernelRequest *kernels, asizei numKernels) {
         if(err != CL_SUCCESS) throw std::string("Could not create kernel \"") + kernels[loop].fileName + ':' + kernels[loop].entryPoint + "\", error " + std::to_string(err);
         this->kernels.push_back(KernelDriver(kernels[loop].groupSize, kern));
     }
-    for(asizei loop = 0; loop < numKernels; loop++) BindParameters(this->kernels[loop].clk, kernels[loop]);
+    for(asizei loop = 0; loop < numKernels; loop++) BindParameters(this->kernels[loop], kernels[loop]);
     aiSignature = ComputeVersionedHash(kernels, numKernels, load);
 }
 
 
-void AbstractTest::BindParameters(cl_kernel kern, const KernelRequest &bindings) {
+void AbstractAlgorithm::BindParameters(KernelDriver &kdesc, const KernelRequest &bindings) {
     // First split out the bindings.
     std::vector<std::string> params;
     asizei comma = 0, prev = 0;
@@ -203,18 +129,15 @@ void AbstractTest::BindParameters(cl_kernel kern, const KernelRequest &bindings)
     // Now look em up, some are special and perhaps they might need an unified way of mangling (?)
     for(cl_uint loop = 0; loop < params.size(); loop++) {
         const auto &name(params[loop]);
-        if(name[0] == '$') {
-            cl_mem core = 0;
-            if(name == "$wuData") core = wuData;
-            else if(name == "$dispatchData") core = dispatchData;
-            else if(name == "$candidates") core = candidates;
-            else throw std::string("No such core resource \"") + name + '"';
-            clSetKernelArg(kern, loop, sizeof(core), &core);
+        SpecialValueBinding desc;
+        if(SpecialValue(desc, name)) {
+            if(desc.earlyBound) clSetKernelArg(kdesc.clk, loop, sizeof(desc.resource.buff), &desc.resource.buff);
+            else kdesc.dtBindings.push_back(std::make_pair(loop, desc.resource.index));
             continue;
         }
         auto bound = resHandles.find(name);
         if(bound != resHandles.cend()) {
-            clSetKernelArg(kern, loop, sizeof(cl_mem), &bound->second);
+            clSetKernelArg(kdesc.clk, loop, sizeof(cl_mem), &bound->second);
             continue;
         }
         // immediate, maybe
@@ -222,103 +145,18 @@ void AbstractTest::BindParameters(cl_kernel kern, const KernelRequest &bindings)
             return rr.immediate && rr.name == name;
         });
         if(imm == resRequests.cend()) throw std::string("Could not find parameter \"") + name + '"';
-        clSetKernelArg(kern, loop, imm->bytes, imm->initialData);
+        clSetKernelArg(kdesc.clk, loop, imm->bytes, imm->initialData);
     }
 }
 
 
-std::vector<std::string> AbstractTest::RunTests(cl_device_id device) const {
-    using namespace std;
-    cl_int err = 0;
-    cl_command_queue queue = clCreateCommandQueue(context, device, 0, &err);
-    if(!queue || err != CL_SUCCESS) throw "Could not create command queue for device!";
-    ScopedFuncCall clearQueue([queue]() { clReleaseCommandQueue(queue); });
-    vector<string> errorMessages;
-    const cl_uint *nextNonces = found.data();
-    for(asizei bindex = 0; bindex < headers.size(); bindex++) {
-        const TestRun &block(headers[bindex]);
-        aubyte be[80];
-        for(asizei i = 0; i < sizeof(be); i += 4) {
-            for(asizei cp = 0; cp < 4; cp++) be[i + cp] = block.clData[i + 3 - cp];
-        }
-        err = clEnqueueWriteBuffer(queue, wuData, CL_TRUE, 0, sizeof(be), be, 0, NULL, NULL);
-        if(err != CL_SUCCESS) throw string("CL error ") + to_string(err) + " while attempting to update $wuData";
-        
-		cl_uint buffer[5]; // taken as is from M8M FillDispatchData... how ugly!
-		buffer[0] = 0;
-		buffer[1] = static_cast<cl_uint>(block.targetBits >> 32);
-		buffer[2] = static_cast<cl_uint>(block.targetBits);
-		buffer[3] = 0;
-		buffer[4] = 0;
-        err = clEnqueueWriteBuffer(queue, dispatchData, CL_TRUE, 0, sizeof(buffer), buffer, 0, NULL, NULL);
-        if(err != CL_SUCCESS) throw string("CL error ") + to_string(err) + " while attempting to update $dispatchData";
-
-        aulong remHashes = block.iterations * nominalHashCount;
-        cl_uint base = 0;
-        vector<auint> candidates;
-        while(remHashes) {
-            const cl_uint thisScan = cl_uint(min(remHashes, aulong(concurrency)));
-		    cl_uint zero = 0;
-		    clEnqueueWriteBuffer(queue, this->candidates, CL_TRUE, 0, sizeof(cl_uint), &zero, 0, NULL, NULL);
-            RunAlgorithm(queue, base, thisScan);
-            vector<auint> results(FromNonceBuffer(queue));
-            base += thisScan;
-            remHashes -= thisScan;
-            for(auto nonce : results) candidates.push_back(nonce);
-        }
-        if(candidates.size() != block.numResults) {
-            string msg("BAD RESULT COUNT for test block [");
-            msg += to_string(bindex) + "]: " + to_string(block.numResults) + " expected, got " + to_string(candidates.size());
-            errorMessages.push_back(msg);
-            continue;
-        }
-        auto unniq(candidates);
-        std::sort(unniq.begin(), unniq.end());
-        std::unique(unniq.begin(), unniq.end());
-        if(unniq.size() != candidates.size()) {
-            string msg("BAD RESULTS for test block [");
-            msg += to_string(bindex) + "]: nonces are not unique, something is going VERY WRONG!";
-            errorMessages.push_back(msg);
-            continue;
-        }
-        asizei mismatch = 0;
-        for(auto nonce : unniq) {
-            bool found = false;
-            for(asizei check = 0; check < block.numResults; check++) {
-                if(nonce == nextNonces[check]) {
-                    found = true;
-                    break;
-                }
-            }
-            if(found == false) mismatch++;
-        }
-        nextNonces += block.numResults;
-        if(mismatch) {
-            string msg("BAD RESULTS for test block [");
-            msg += to_string(bindex) + "]: " + to_string(mismatch) + " nonce values not matched.";
-            errorMessages.push_back(msg);
-        }
-    }
-    return errorMessages;
-}
-
-
-std::vector<cl_uint> AbstractTest::FromNonceBuffer(cl_command_queue q) const {
-    cl_int err;
-    cl_uint *nonces = reinterpret_cast<cl_uint*>(clEnqueueMapBuffer(q, candidates, CL_TRUE, CL_MAP_READ, 0, nonceBufferSize, 0, NULL, NULL, &err));
-    if(err != CL_SUCCESS) throw std::string("CL error ") + std::to_string(err) + " attempting to map nonce buffers.";
-    ScopedFuncCall unmap([q, nonces, this]() { clEnqueueUnmapMemObject(q, candidates, nonces, 0, NULL, NULL); });
-    const cl_uint numNonces = *nonces;
-    nonces++;
-    std::vector<cl_uint> ret;
-    for(asizei cp = 0; cp < numNonces; cp++) ret.push_back(nonces[cp]);
-    return ret;
-}
-
-
-void AbstractTest::RunAlgorithm(cl_command_queue q, asizei base, asizei amount) const {
+void AbstractAlgorithm::RunAlgorithm(cl_command_queue q, asizei amount) const {
     for(asizei loop = 0; loop < kernels.size(); loop++) {
         const auto &kern(kernels[loop]);
+        for(auto param : kern.dtBindings) {
+            cl_mem buff(lbBuffers[param.second]);
+            clSetKernelArg(kern.clk, param.first, sizeof(buff), &buff);
+        }
         asizei woff[3], wsize[3];
         memset(woff, 0, sizeof(woff));
         memset(wsize, 0, sizeof(wsize));
@@ -326,14 +164,14 @@ void AbstractTest::RunAlgorithm(cl_command_queue q, asizei base, asizei amount) 
         - (N-1)th dimension is the hash being computed in global work -> number of hashes computed per workgroup in local work declaration
         - All previous dimensions are the "team" and can be easily pulled from declaration.
         Work offset leaves "team players" untouched while global work size is always <team size><total hashes>. */
-        woff[kern.dimensionality - 1] = base;
+        woff[kern.dimensionality - 1] = hashing.nonceBase;
         for(auto cp = 0u; cp < kern.dimensionality - 1; cp++) wsize[cp] = kern.wgs[cp];
         wsize[kern.dimensionality - 1] = amount;
 
         cl_int error = clEnqueueNDRangeKernel(q, kernels[loop].clk, kernels[loop].dimensionality, woff, wsize, kernels[loop].wgs, 0, NULL, NULL);
         if(error != CL_SUCCESS) {
             std::string ret("OpenCL error " + std::to_string(error) + " returned by clEnqueueNDRangeKernel(");
-            ret += algoName;
+            ret += identifier.algorithm + '.' + identifier.implementation;
             ret += '[' + std::to_string(loop) + ']';
             throw ret;
         }
@@ -341,8 +179,8 @@ void AbstractTest::RunAlgorithm(cl_command_queue q, asizei base, asizei amount) 
 }
 
 
-aulong AbstractTest::ComputeVersionedHash(const KernelRequest *kerns, asizei numKernels, const std::map<std::string, std::string> &src) const {
-	std::string sign(algoName + '.' + impName + '.' + iversion + '\n');
+aulong AbstractAlgorithm::ComputeVersionedHash(const KernelRequest *kerns, asizei numKernels, const std::map<std::string, std::string> &src) const {
+	std::string sign(identifier.algorithm + '.' + identifier.implementation + '.' + identifier.version + '\n');
     for(auto kern = kerns; kern < kerns + numKernels; kern++) {
         sign += ">>>>" + kern->fileName + ':' + kern->entryPoint + '(' + kern->compileFlags + ')' + '\n';
         // groupSize is most likely not to be put there...

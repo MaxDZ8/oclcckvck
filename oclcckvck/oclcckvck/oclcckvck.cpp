@@ -21,10 +21,11 @@ which (arguably) does both and will hopefully be superceded by this one. */
 #include <string>
 
 
-#define TEST_QUBIT 1
+#define TEST_QUBIT_FIVESTEPS 1
 
-#if TEST_QUBIT
+#if TEST_QUBIT_FIVESTEPS
 #include "QubitTest.h"
+#include "AlgoImplementations/QubitFiveStepsCL12.h"
 #endif
 
 
@@ -103,28 +104,37 @@ std::string Hex(const POD &blob) {
 }
 
 
-void Dispatch(const AbstractTest &algo, const std::vector<Device> &devices) {
-    // In theory I could test all devices concurrently but I'm currently using a single set of resources.
-    // As I'm already requesting resource migration all performance estimations are off, this will have to be fixed in the future.
+template<typename Test>
+void Dispatch(const std::vector<Platform> &plats, const std::vector<cl_context> &platContext, asizei concurrency) {
     std::ofstream errorLog;
-    for(auto &device : devices) {
-        auto errors(algo.RunTests(device.clid));
-        if(errors.size()) {
-            auto signature(Hex(algo.GetVersioningHash()));
-            if(errorLog.is_open() == false) {
-                std::string fname(algo.algoName + '_' + algo.impName + '_' + signature + ".txt");
-                errorLog.open(fname.c_str());
-                if(errorLog.is_open() == false) throw "Could not open error log file.";
-                errorLog<<"Algorithm:      "<<algo.algoName<<std::endl;
-                errorLog<<"Implementation: "<<algo.impName<<std::endl;
-                errorLog<<"Signature:      "<<signature<<std::endl<<std::endl;
+    for(unsigned p = 0; p < plats.size(); p++) {
+        for(unsigned d = 0; d < plats[p].devices.size(); d++) {
+            algoImplementations::QubitFiveStepsCL12 imp(platContext[p], plats[p].devices[d].clid, concurrency);
+            QubitTest test;
+            if(!test.CanRunTests(concurrency)) {
+                std::string msg(imp.identifier.Presentation());
+                msg += " cannot be tested with concurrency " + std::to_string(concurrency);
+                msg += ", not currently supposed to happen.";
+                throw msg;
             }
-            std::cout<<"Algorithm:      "<<algo.algoName<<std::endl;
-            std::cout<<"Implementation: "<<algo.impName<<std::endl;
-            std::cout<<"Signature:      "<<signature<<std::endl<<std::endl;
-            for(auto err : errors) {
-                errorLog<<err<<std::endl;
-                std::cout<<err<<std::endl;
+            auto errors(test.RunTests(imp));
+            if(errors.size()) {
+                auto signature(Hex(imp.GetVersioningHash()));
+                if(errorLog.is_open() == false) {
+                    std::string fname(imp.identifier.Presentation() + '.' + signature + ".txt");
+                    errorLog.open(fname.c_str());
+                    if(errorLog.is_open() == false) throw "Could not open error log file.";
+                    errorLog<<"Algorithm:      "<<imp.identifier.algorithm<<std::endl;
+                    errorLog<<"Implementation: "<<imp.identifier.implementation<<std::endl;
+                    errorLog<<"Signature:      "<<signature<<std::endl<<std::endl;
+                }
+                std::cout<<"Algorithm:      "<<imp.identifier.algorithm<<std::endl;
+                std::cout<<"Implementation: "<<imp.identifier.implementation<<std::endl;
+                std::cout<<"Signature:      "<<signature<<std::endl<<std::endl;
+                for(auto err : errors) {
+                    errorLog<<err<<std::endl;
+                    std::cout<<err<<std::endl;
+                }
             }
         }
     }
@@ -162,10 +172,10 @@ int main() {
             cl_context ctx = clCreateContext(ctxprops, cl_uint(devs.size()), devs.data(), errorFunc, plats.data() + p, &err);
             platContext.push_back(ctx); // reserved, cannot fail
         }
-    #if TEST_QUBIT
-        for(unsigned p = 0; p < plats.size(); p++) {
+    #if TEST_QUBIT_FIVESTEPS
+        {
             const asizei concurrency = 1024 * 16;
-            Dispatch(QubitTest(concurrency, platContext[p]), plats[p].devices);
+            Dispatch<QubitTest>(plats, platContext, concurrency);
         }
     #endif
     } catch(const char *msg) { std::cout<<msg<<std::endl; }
