@@ -8,10 +8,10 @@
 
 namespace algoImplementations {
 
-class QubitFiveStepsCL12 : public StopWaitAlgorithm {
+class FreshWarmCL12 : public StopWaitAlgorithm {
 public:
-    QubitFiveStepsCL12(cl_context ctx, cl_device_id dev, asizei concurrency)
-        : StopWaitAlgorithm(ctx, dev, concurrency, "Qubit", "fiveSteps", "v1", true) {
+    FreshWarmCL12(cl_context ctx, cl_device_id dev, asizei concurrency)
+        : StopWaitAlgorithm(ctx, dev, concurrency, "Fresh", "warm", "v1", true) {
         const asizei passingBytes = concurrency * 16 * sizeof(cl_uint);
         KnownConstantProvider K; // all the constants are fairly nimble so I don't save nor optimize this in any way!
         auto AES_T_TABLES(K[CryptoConstant::AES_T]);
@@ -36,14 +36,14 @@ public:
         typedef WorkGroupDimensionality WGD;
         KernelRequest kernels[] = {
             {
-                "Luffa_1W.cl", "Luffa_1way", "-D LUFFA_HEAD",
-                WGD(256),
-                "$wuData, io0"
+                "SHAvite3_1W.cl", "SHAvite3_1way", "-D HEAD_OF_CHAINED_HASHING",
+                WGD(64),
+                "$wuData, io0, AES_T_TABLES, sh3_roundCount"
             },
             {
-                "CubeHash_2W.cl", "CubeHash_2way", "",
-                WGD(2, 32),
-                "io0, io1"
+                "SIMD_16W.cl", "SIMD_16way", "",
+                WGD(16, 4),
+                "io0, io1, io0, SIMD_ALPHA, SIMD_BETA"
             },
             {
                 "SHAvite3_1W.cl", "SHAvite3_1way", "",

@@ -96,6 +96,8 @@ public:
         return ret;
     }
 
+    asizei GetConcurrency() const { return hashCount; }
+
 private:
     bool SpecialValue(SpecialValueBinding &desc, const std::string &name) {
         // This is very easy for stop-n-wait as everything can be bound statically.

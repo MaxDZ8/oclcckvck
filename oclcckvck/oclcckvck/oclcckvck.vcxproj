@@ -153,13 +153,19 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="AbstractAlgorithm.h" />
+    <ClInclude Include="AlgoImplementations\FreshWarmCL12.h" />
+    <ClInclude Include="AlgoImplementations\MYRGRSMonolithicCL12.h" />
+    <ClInclude Include="AlgoImplementations\NeoscryptSmoothCL12.h" />
     <ClInclude Include="AlgoImplementations\QubitFiveStepsCL12.h" />
     <ClInclude Include="AlgoTest.h" />
     <ClInclude Include="KnownConstantsProvider.h" />
     <ClInclude Include="NonceStructs.h" />
-    <ClInclude Include="QubitTest.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="StopWaitAlgorithm.h" />
+    <ClInclude Include="TestData\Fresh.h" />
+    <ClInclude Include="TestData\MYRGRS.h" />
+    <ClInclude Include="TestData\Neoscrypt.h" />
+    <ClInclude Include="TestData\Qubit.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="oclcckvck.rc" />
@@ -175,7 +181,10 @@
   <ItemGroup>
     <ClCompile Include="AbstractAlgorithm.cpp" />
     <ClCompile Include="oclcckvck.cpp" />
-    <ClCompile Include="QubitTest.cpp" />
+    <ClCompile Include="TestData\Fresh.cpp" />
+    <ClCompile Include="TestData\MYRGRS.cpp" />
+    <ClCompile Include="TestData\Neoscrypt.cpp" />
+    <ClCompile Include="TestData\Qubit.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

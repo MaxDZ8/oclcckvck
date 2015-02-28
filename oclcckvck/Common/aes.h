@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Massimo Del Zotto
+ * Copyright (C) 2014-2015 Massimo Del Zotto
  * This code is released under the MIT license.
  * For conditions of distribution and use, see the LICENSE or hit the web.
  */

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Massimo Del Zotto
+ * Copyright (C) 2015 Massimo Del Zotto
  * This code is released under the MIT license.
  * For conditions of distribution and use, see the LICENSE or hit the web.
  */
@@ -22,10 +22,28 @@ which (arguably) does both and will hopefully be superceded by this one. */
 
 
 #define TEST_QUBIT_FIVESTEPS 1
+#define TEST_MYRGRS_MONOLITHIC 1
+#define TEST_FRESH_WARM 1
+#define TEST_NEOSCRYPT_SMOOTH 1
 
 #if TEST_QUBIT_FIVESTEPS
-#include "QubitTest.h"
+#include "TestData/Qubit.h"
 #include "AlgoImplementations/QubitFiveStepsCL12.h"
+#endif
+
+#if TEST_MYRGRS_MONOLITHIC
+#include "TestData/MYRGRS.h"
+#include "AlgoImplementations/MYRGRSMonolithicCL12.h"
+#endif
+
+#if TEST_FRESH_WARM
+#include "TestData/Fresh.h"
+#include "AlgoImplementations/FreshWarmCL12.h"
+#endif
+
+#if TEST_NEOSCRYPT_SMOOTH
+#include "TestData/Neoscrypt.h"
+#include "AlgoImplementations/NeoscryptSmoothCL12.h"
 #endif
 
 
@@ -104,13 +122,80 @@ std::string Hex(const POD &blob) {
 }
 
 
-template<typename Test>
+std::string Header(const AlgoIdentifier &id, aulong signature) {
+    std::string val;
+    val += "Algorithm:      " + id.algorithm + '\n';
+    val += "Implementation: " + id.implementation + '\n';
+    val += "Signature:      " + Hex(signature) + '\n';
+    return val;
+}
+
+
+template<typename Type>
+Type GetCLDevProp(cl_device_info what, cl_device_id device) {
+    Type buff;
+    asizei required = 0;
+    cl_int err = clGetDeviceInfo(device, what, sizeof(buff), &buff, &required);
+    if(required > sizeof(buff)) return Type(-2);
+    else if(err != CL_SUCCESS) return Type(-1);
+    return buff;
+};
+
+
+std::string Header(const std::vector<Platform> &plats, asizei plat, asizei dev) {
+    std::vector<char> buff(256);
+    auto platform(plats[plat].clid);
+    auto device(plats[plat].devices[dev].clid);
+    auto getCLPlatProp = [&buff, platform](cl_platform_info what) -> std::string {
+        asizei required = 0;
+        clGetPlatformInfo(platform, what, 0, NULL, &required);
+        buff.resize(required);
+        cl_int err = clGetPlatformInfo(platform, what, buff.size(), buff.data(), &required);
+        if(err != CL_SUCCESS) return "<ERROR>";
+        return std::string(buff.data(), required) + '\n';
+    };
+    auto getCLDevPropUINT  = [device](cl_device_info what) -> std::string { return std::to_string(GetCLDevProp<cl_uint>(what, device)) + '\n'; };
+    auto getCLDevPropULONG = [device](cl_device_info what) -> std::string { return std::to_string(GetCLDevProp<cl_ulong>(what, device)) + '\n'; };
+    auto getCLDevPropBOOL = [device](cl_device_info what) -> std::string { return GetCLDevProp<cl_bool>(what, device)? "true\n" : "false\n"; };
+    auto getCLDevPropSTRING = [&buff, device](cl_device_info what) -> std::string {
+        asizei required = 0;
+        clGetDeviceInfo(device, what, 0, NULL, &required);
+        buff.resize(required);
+        cl_int err = clGetDeviceInfo(device, what, buff.size(), buff.data(), &required);
+        if(err != CL_SUCCESS) return "<ERROR>";
+        return std::string(buff.data(), required) + '\n';
+    };
+    std::string val("Device platform [" + std::to_string(plat) + "]\n");
+    val += "  Name:       " + getCLPlatProp(CL_PLATFORM_NAME);
+    val += "  Version:    " + getCLPlatProp(CL_PLATFORM_VERSION);
+    val += "  Vendor:     " + getCLPlatProp(CL_PLATFORM_VENDOR);
+    val += "  Profile:    " + getCLPlatProp(CL_PLATFORM_PROFILE);
+    val += "  Extensions: " + getCLPlatProp(CL_PLATFORM_EXTENSIONS);
+    val += '\n';
+    val += "Device [" + std::to_string(dev) + "]\n";
+    val += "  ID:             " + getCLDevPropUINT(CL_DEVICE_VENDOR_ID);
+    val += "  Chip name:      " + getCLDevPropSTRING(CL_DEVICE_NAME);
+    val += "  Cores:          " + getCLDevPropUINT(CL_DEVICE_MAX_COMPUTE_UNITS);
+    val += "  Nominal clock:  " + getCLDevPropUINT(CL_DEVICE_MAX_CLOCK_FREQUENCY);
+    val += "  Max alloc: . .  " + getCLDevPropULONG(CL_DEVICE_MAX_MEM_ALLOC_SIZE);
+    val += "  Base alignment: " + getCLDevPropULONG(CL_DEVICE_MEM_BASE_ADDR_ALIGN);
+    val += "  Unified memory: " + getCLDevPropBOOL(CL_DEVICE_HOST_UNIFIED_MEMORY);
+    val += "  Little endian:  " + getCLDevPropBOOL(CL_DEVICE_ENDIAN_LITTLE);
+    val += "  Driver version: " + getCLDevPropSTRING(CL_DRIVER_VERSION);
+    val += "  Device version: " + getCLDevPropSTRING(CL_DEVICE_VERSION);
+    val += "  CL-C version:   " + getCLDevPropSTRING(CL_DEVICE_OPENCL_C_VERSION);
+    val += "  Extensions:     " + getCLDevPropSTRING(CL_DEVICE_EXTENSIONS);
+    return val + '\n';
+}
+
+
+template<typename TestData, typename TestSubject>
 void Dispatch(const std::vector<Platform> &plats, const std::vector<cl_context> &platContext, asizei concurrency) {
     std::ofstream errorLog;
     for(unsigned p = 0; p < plats.size(); p++) {
         for(unsigned d = 0; d < plats[p].devices.size(); d++) {
-            algoImplementations::QubitFiveStepsCL12 imp(platContext[p], plats[p].devices[d].clid, concurrency);
-            QubitTest test;
+            TestSubject imp(platContext[p], plats[p].devices[d].clid, concurrency);
+            TestData test;
             if(!test.CanRunTests(concurrency)) {
                 std::string msg(imp.identifier.Presentation());
                 msg += " cannot be tested with concurrency " + std::to_string(concurrency);
@@ -118,19 +203,16 @@ void Dispatch(const std::vector<Platform> &plats, const std::vector<cl_context> 
                 throw msg;
             }
             auto errors(test.RunTests(imp));
+            auto signature(imp.GetVersioningHash());
+            const std::string errorHeader(Header(imp.identifier, signature) + Header(plats, p, d));
             if(errors.size()) {
-                auto signature(Hex(imp.GetVersioningHash()));
                 if(errorLog.is_open() == false) {
-                    std::string fname(imp.identifier.Presentation() + '.' + signature + ".txt");
+                    std::string fname(imp.identifier.Presentation() + '.' + Hex(signature) + ".txt");
                     errorLog.open(fname.c_str());
                     if(errorLog.is_open() == false) throw "Could not open error log file.";
-                    errorLog<<"Algorithm:      "<<imp.identifier.algorithm<<std::endl;
-                    errorLog<<"Implementation: "<<imp.identifier.implementation<<std::endl;
-                    errorLog<<"Signature:      "<<signature<<std::endl<<std::endl;
+                    errorLog<<errorHeader<<std::endl;
                 }
-                std::cout<<"Algorithm:      "<<imp.identifier.algorithm<<std::endl;
-                std::cout<<"Implementation: "<<imp.identifier.implementation<<std::endl;
-                std::cout<<"Signature:      "<<signature<<std::endl<<std::endl;
+                std::cout<<errorHeader<<std::endl;
                 for(auto err : errors) {
                     errorLog<<err<<std::endl;
                     std::cout<<err<<std::endl;
@@ -175,7 +257,25 @@ int main() {
     #if TEST_QUBIT_FIVESTEPS
         {
             const asizei concurrency = 1024 * 16;
-            Dispatch<QubitTest>(plats, platContext, concurrency);
+            Dispatch<testData::Qubit, algoImplementations::QubitFiveStepsCL12>(plats, platContext, concurrency);
+        }
+    #endif
+    #if TEST_MYRGRS_MONOLITHIC
+        {
+            const asizei concurrency = 1024 * 16;
+            Dispatch<testData::MYRGRS, algoImplementations::MYRGRSMonolithicCL12>(plats, platContext, concurrency);
+        }
+    #endif
+    #if TEST_FRESH_WARM
+        {
+            const asizei concurrency = 1024 * 16;
+            Dispatch<testData::Fresh, algoImplementations::FreshWarmCL12>(plats, platContext, concurrency);
+        }
+    #endif
+    #if TEST_NEOSCRYPT_SMOOTH
+        {
+            const asizei concurrency = 1024 * 4;
+            Dispatch<testData::Neoscrypt, algoImplementations::NeoscryptSmoothCL12>(plats, platContext, concurrency);
         }
     #endif
     } catch(const char *msg) { std::cout<<msg<<std::endl; }

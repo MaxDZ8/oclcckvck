@@ -38,6 +38,10 @@ struct AlgoIdentifier {
     std::string Presentation() const { return algorithm + '.' + implementation; }
     // including the version is typically not very useful for presentation purposes as algorithm versions relate to host code, not necessarily
     // to kernel versions. Better to use algorithm signature instead!
+
+    bool AreYou(const char *algo, const char *imp) const {
+        return _stricmp(algo, algorithm.c_str()) == 0 && _stricmp(imp, implementation.c_str()) == 0; // also considered only first char case-insensitive, no point really
+    }
 };
 
 
@@ -128,11 +132,11 @@ protected:
         std::string presentationName; //!< only used when not empty, overrides name for user-presentation purposes
 
         explicit ResourceRequest() { }
-        ResourceRequest(const char *name, cl_mem_flags allocationFlags, asizei footprint, const aubyte *initialize = nullptr) {
+        ResourceRequest(const char *name, cl_mem_flags allocationFlags, asizei footprint, const void *initialize = nullptr) {
             this->name = name;
             memFlags = allocationFlags;
             bytes = footprint;
-            initialData = initialize;
+            initialData = reinterpret_cast<const aubyte*>(initialize);
             immediate = false;
             memset(&channels, 0, sizeof(channels));
             memset(&imageDesc, 0, sizeof(imageDesc));

@@ -11,12 +11,12 @@
     <Filter Include="Code\AlgoImplementations">
       <UniqueIdentifier>{2f223e65-bba0-4393-8c94-f71e1f63da9f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Code\TestData">
+      <UniqueIdentifier>{7382aadb-ff7f-47dd-81a3-bf2f23f283b4}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h" />
-    <ClInclude Include="QubitTest.h">
-      <Filter>Code</Filter>
-    </ClInclude>
     <ClInclude Include="AbstractAlgorithm.h">
       <Filter>Code</Filter>
     </ClInclude>
@@ -34,6 +34,27 @@
     </ClInclude>
     <ClInclude Include="AlgoImplementations\QubitFiveStepsCL12.h">
       <Filter>Code\AlgoImplementations</Filter>
+    </ClInclude>
+    <ClInclude Include="AlgoImplementations\FreshWarmCL12.h">
+      <Filter>Code\AlgoImplementations</Filter>
+    </ClInclude>
+    <ClInclude Include="AlgoImplementations\MYRGRSMonolithicCL12.h">
+      <Filter>Code\AlgoImplementations</Filter>
+    </ClInclude>
+    <ClInclude Include="AlgoImplementations\NeoscryptSmoothCL12.h">
+      <Filter>Code\AlgoImplementations</Filter>
+    </ClInclude>
+    <ClInclude Include="TestData\Fresh.h">
+      <Filter>Code\TestData</Filter>
+    </ClInclude>
+    <ClInclude Include="TestData\MYRGRS.h">
+      <Filter>Code\TestData</Filter>
+    </ClInclude>
+    <ClInclude Include="TestData\Neoscrypt.h">
+      <Filter>Code\TestData</Filter>
+    </ClInclude>
+    <ClInclude Include="TestData\Qubit.h">
+      <Filter>Code\TestData</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -53,8 +74,17 @@
     <ClCompile Include="AbstractAlgorithm.cpp">
       <Filter>Code</Filter>
     </ClCompile>
-    <ClCompile Include="QubitTest.cpp">
-      <Filter>Code</Filter>
+    <ClCompile Include="TestData\Fresh.cpp">
+      <Filter>Code\TestData</Filter>
+    </ClCompile>
+    <ClCompile Include="TestData\MYRGRS.cpp">
+      <Filter>Code\TestData</Filter>
+    </ClCompile>
+    <ClCompile Include="TestData\Neoscrypt.cpp">
+      <Filter>Code\TestData</Filter>
+    </ClCompile>
+    <ClCompile Include="TestData\Qubit.cpp">
+      <Filter>Code\TestData</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

@@ -1,11 +1,14 @@
 /*
- * Copyright (C) 2014 Massimo Del Zotto
+ * Copyright (C) 2015 Massimo Del Zotto
  * This code is released under the MIT license.
  * For conditions of distribution and use, see the LICENSE or hit the web.
  */
-#include "QubitTest.h"
+#include "Qubit.h"
 
-const AlgoTest::TestRun QubitTest::deterministic[48] = {
+namespace testData {
+
+
+const AlgoTest::TestRun Qubit::deterministic[48] = {
 	{ // [0]
 		{ 2, 8, 0, 0, 95, 72, 241, 152, 94, 243, 169, 203, 82, 59, 87, 103, 29, 199, 229, 211, 250, 241, 109, 77, 175, 17, 81, 34, 80, 8, 182, 138, 72, 27, 199, 5, 133, 46, 0, 44, 22, 77, 230, 155, 137, 164, 191, 24, 48, 98, 223, 71, 16, 223, 100, 59, 142, 221, 127, 81, 218, 14, 58, 185, 204, 44, 200, 131, 70, 227, 234, 84, 109, 195, 2, 28, 0, 0, 0, 0 },
 		0xffff000000ull,
@@ -297,7 +300,7 @@ const AlgoTest::TestRun QubitTest::deterministic[48] = {
 };
 
 
-const unsigned int QubitTest::found_candidates[48] = {
+const unsigned int Qubit::found_candidates[20] = {
 	    // [0]
 	    // [1]
 	    // [2]
@@ -347,3 +350,5 @@ const unsigned int QubitTest::found_candidates[48] = {
 	0x13524c00,  // [46]
 	    // [47]
 };
+
+}

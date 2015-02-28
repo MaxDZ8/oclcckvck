@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Massimo Del Zotto
+ * Copyright (C) 2015 Massimo Del Zotto
  * This code is released under the MIT license.
  * For conditions of distribution and use, see the LICENSE or hit the web.
  */
@@ -172,7 +172,7 @@ void AbstractAlgorithm::RunAlgorithm(cl_command_queue q, asizei amount) const {
         if(error != CL_SUCCESS) {
             std::string ret("OpenCL error " + std::to_string(error) + " returned by clEnqueueNDRangeKernel(");
             ret += identifier.algorithm + '.' + identifier.implementation;
-            ret += '[' + std::to_string(loop) + ']';
+            ret += '[' + std::to_string(loop) + "])";
             throw ret;
         }
     }
