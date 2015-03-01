@@ -5,15 +5,21 @@
  */
 #pragma once
 #include "StopWaitAlgorithm.h"
+#include <functional>
+
 
 /*! A class derived from there groups a set of reference data inputs, expected outputs and CL algos to evaluate input at runtime.
-This involves compiling a set of kernels, allocating a set of resources and binding them to the kernels. 
+This involves compiling a set of kernels, allocating a set of resources and binding them to the kernels.
 Also, have a taste at algorithm setup mangling that will be introduced in M8M sometime in the future. */
 class AlgoTest {
 public:
     const aulong nominalHashCount; //!< One TestRun::iteration counts this amount of hashes.
-    
+    //! A function called each time a block is tested with the index of the completed block.
+    std::function<void(asizei)> onBlockHashed;
+
     virtual ~AlgoTest() { }
+
+    asizei GetNumTests() const { return GetHeaders().second; }
 
     //! Tests must consume exact amounts of hashes at each step or run the risk of missing nonces or placing them in the wrong bucket.
     //! This returns true if the hashes can be divided correctly. If so, it's worth calling RunTests on the algorithm.
@@ -39,7 +45,7 @@ public:
             for(asizei cp = 0; cp < sizeof(header); cp++) header[cp] = block.clData[cp];
             algo.Header(header);
             algo.TargetBits(block.targetBits);
-        
+
             aulong remHashes = block.iterations * nominalHashCount;
             vector<auint> candidates;
             while(remHashes) {
@@ -79,6 +85,7 @@ public:
                 msg += to_string(bindex) + "]: " + to_string(mismatch) + " nonce values not matched.";
                 errorMessages.push_back(msg);
             }
+            if(onBlockHashed) onBlockHashed(bindex);
         }
         return errorMessages;
     }

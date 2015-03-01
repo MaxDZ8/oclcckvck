@@ -61,7 +61,7 @@ public:
                 "io1, $candidates, $dispatchData, AES_T_TABLES"
             }
         };
-        PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]));
+        PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), dev);
     }
 };
 

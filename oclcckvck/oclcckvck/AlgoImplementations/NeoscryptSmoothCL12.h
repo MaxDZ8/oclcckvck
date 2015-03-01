@@ -66,7 +66,7 @@ public:
                 "$candidates, $dispatchData, xo, xi, KDF_CONST_N, buffA, buffB, pad"
             }
         };
-        PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]));
+        PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), dev);
     }
 };
 

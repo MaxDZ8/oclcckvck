@@ -12,7 +12,7 @@ class MYRGRSMonolithicCL12 : public StopWaitAlgorithm {
 public:
     MYRGRSMonolithicCL12(cl_context ctx, cl_device_id dev, asizei concurrency)
         : StopWaitAlgorithm(ctx, dev, concurrency, "GRSMYR", "monolithic", "v1", true) {
-        auint roundCount[5] = { 
+        auint roundCount[5] = {
             14, 14, 14, // groestl rounds
             2, 3 // SHA rounds
         };
@@ -30,7 +30,7 @@ public:
                 "$candidates, $wuData, $dispatchData, roundCount"
             }
         };
-        PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]));
+        PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), dev);
     }
 };
 
