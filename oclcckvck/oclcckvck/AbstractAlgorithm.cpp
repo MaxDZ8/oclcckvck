@@ -180,21 +180,21 @@ void AbstractAlgorithm::RunAlgorithm(cl_command_queue q, asizei amount) const {
 
 
 aulong AbstractAlgorithm::ComputeVersionedHash(const KernelRequest *kerns, asizei numKernels, const std::map<std::string, std::string> &src) const {
-	std::string sign(identifier.algorithm + '.' + identifier.implementation + '.' + identifier.version + '\n');
+    std::string sign(identifier.algorithm + '.' + identifier.implementation + '.' + identifier.version + '\n');
     for(auto kern = kerns; kern < kerns + numKernels; kern++) {
         sign += ">>>>" + kern->fileName + ':' + kern->entryPoint + '(' + kern->compileFlags + ')' + '\n';
         // groupSize is most likely not to be put there...
         // are param bindings to be put there?
         sign += src.find(kern->fileName)->second + "<<<<\n";
     }
-	hashing::SHA256 blah(reinterpret_cast<const aubyte*>(sign.c_str()), sign.length());
-	hashing::SHA256::Digest blobby;
-	blah.GetHash(blobby);
-	aulong ret = 0; // ignore endianess here so we get to know host endianess by algo signature
-	for(asizei loop = 0; loop < blobby.size(); loop += 8) {
-		aulong temp;
-		memcpy_s(&temp, sizeof(temp), blobby.data() + loop, sizeof(temp));
-		ret ^= temp;
-	}
-	return ret;
+    hashing::SHA256 blah(reinterpret_cast<const aubyte*>(sign.c_str()), sign.length());
+    hashing::SHA256::Digest blobby;
+    blah.GetHash(blobby);
+    aulong ret = 0; // ignore endianess here so we get to know host endianess by algo signature
+    for(asizei loop = 0; loop < blobby.size(); loop += 8) {
+        aulong temp;
+        memcpy_s(&temp, sizeof(temp), blobby.data() + loop, sizeof(temp));
+        ret ^= temp;
+    }
+    return ret;
 }

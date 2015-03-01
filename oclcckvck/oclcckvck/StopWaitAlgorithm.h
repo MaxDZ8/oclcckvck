@@ -54,12 +54,12 @@ public:
         }
         if(err != CL_SUCCESS) throw std::string("CL error ") + std::to_string(err) + " while attempting to update $wuData";
 
-		cl_uint buffer[5]; // taken as is from M8M FillDispatchData... how ugly!
-		buffer[0] = 0;
-		buffer[1] = static_cast<cl_uint>(hashing.target >> 32);
-		buffer[2] = static_cast<cl_uint>(hashing.target);
-		buffer[3] = 0;
-		buffer[4] = 0;
+        cl_uint buffer[5]; // taken as is from M8M FillDispatchData... how ugly!
+        buffer[0] = 0;
+        buffer[1] = static_cast<cl_uint>(hashing.target >> 32);
+        buffer[2] = static_cast<cl_uint>(hashing.target);
+        buffer[3] = 0;
+        buffer[4] = 0;
         err = clEnqueueWriteBuffer(queue, dispatchData, CL_TRUE, 0, sizeof(buffer), buffer, 0, NULL, NULL);
         if(err != CL_SUCCESS) throw std::string("CL error ") + std::to_string(err) + " while attempting to update $dispatchData";
 
@@ -121,12 +121,12 @@ private:
 
     void PrepareIOBuffers(cl_context context, asizei hashCount){
         cl_int error;
-	    asizei byteCount = 80;
-	    wuData = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY, byteCount, NULL, &error);
-	    if(error != CL_SUCCESS) throw std::string("OpenCL error ") + std::to_string(error) + " while trying to create wuData buffer.";
-	    byteCount = 5 * sizeof(cl_uint);
-	    dispatchData = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY, byteCount, NULL, &error);
-	    if(error != CL_SUCCESS) throw std::string("OpenCL error ") + std::to_string(error) + " while trying to create dispatchData buffer.";
+        asizei byteCount = 80;
+        wuData = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY, byteCount, NULL, &error);
+        if(error != CL_SUCCESS) throw std::string("OpenCL error ") + std::to_string(error) + " while trying to create wuData buffer.";
+        byteCount = 5 * sizeof(cl_uint);
+        dispatchData = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY, byteCount, NULL, &error);
+        if(error != CL_SUCCESS) throw std::string("OpenCL error ") + std::to_string(error) + " while trying to create dispatchData buffer.";
         // The candidate buffer should really be dependant on difficulty setting but I take it easy.
         byteCount = 1 + hashCount / (32 * 1024);
         //! \todo pull the whole hash down so I can check mismatches
@@ -134,6 +134,6 @@ private:
         byteCount *= sizeof(cl_uint);
         nonceBufferSize = byteCount;
         candidates = clCreateBuffer(context, CL_MEM_ALLOC_HOST_PTR, byteCount, NULL, &error);
-	    if(error) throw std::string("OpenCL error ") + std::to_string(error) + " while trying to resulting nonces buffer.";
+        if(error) throw std::string("OpenCL error ") + std::to_string(error) + " while trying to resulting nonces buffer.";
     }
 };

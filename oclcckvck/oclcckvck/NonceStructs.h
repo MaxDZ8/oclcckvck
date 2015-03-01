@@ -17,9 +17,9 @@ Inside each source, there will be various jobs over time so we have to identify 
 Nonces are not really "originated" from the data associated with this structure but rather originated from the mining process
 started from the data itself. */
 struct NonceOriginIdentifier {
-	const void *owner;
-	std::string job;
-	explicit NonceOriginIdentifier() : owner(nullptr) { }
+    const void *owner;
+    std::string job;
+    explicit NonceOriginIdentifier() : owner(nullptr) { }
     NonceOriginIdentifier(const void *from, const char *j) : owner(from), job(j) { }
     NonceOriginIdentifier(const void *from, const std::string &j) : NonceOriginIdentifier(from, j.c_str()) { }
 };
@@ -30,7 +30,7 @@ and mining algorithms don't care about it. This structure is used by mining algo
 will recostruct the nonce2 used. */
 struct MinedNonces {
     std::array<aubyte, 80> from;
-	std::vector<auint> nonces;
+    std::vector<auint> nonces;
     explicit MinedNonces() = default;
     MinedNonces(const std::array<aubyte, 80> &hashOriginator) : from(hashOriginator) { }
 };
