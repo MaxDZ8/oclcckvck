@@ -21,11 +21,6 @@ which (arguably) does both and will hopefully be superceded by this one. */
 #include <string>
 
 
-#define TEST_QUBIT_FIVESTEPS 1
-#define TEST_MYRGRS_MONOLITHIC 1
-#define TEST_FRESH_WARM 1
-#define TEST_NEOSCRYPT_SMOOTH 1
-
 #if TEST_QUBIT_FIVESTEPS
 #include "TestData/Qubit.h"
 #include "AlgoImplementations/QubitFiveStepsCL12.h"
@@ -45,6 +40,10 @@ which (arguably) does both and will hopefully be superceded by this one. */
 #include "TestData/Neoscrypt.h"
 #include "AlgoImplementations/NeoscryptSmoothCL12.h"
 #endif
+
+
+bool opt_verbose = true;
+bool opt_showTestTime = true;
 
 
 struct Device {
@@ -177,7 +176,7 @@ std::string Header(const std::vector<Platform> &plats, asizei plat, asizei dev) 
     val += "  Chip name:      " + getCLDevPropSTRING(CL_DEVICE_NAME);
     val += "  Cores:          " + getCLDevPropUINT(CL_DEVICE_MAX_COMPUTE_UNITS);
     val += "  Nominal clock:  " + getCLDevPropUINT(CL_DEVICE_MAX_CLOCK_FREQUENCY);
-    val += "  Max alloc: . .  " + getCLDevPropULONG(CL_DEVICE_MAX_MEM_ALLOC_SIZE);
+    val += "  Max alloc:      " + getCLDevPropULONG(CL_DEVICE_MAX_MEM_ALLOC_SIZE);
     val += "  Base alignment: " + getCLDevPropULONG(CL_DEVICE_MEM_BASE_ADDR_ALIGN);
     val += "  Unified memory: " + getCLDevPropBOOL(CL_DEVICE_HOST_UNIFIED_MEMORY);
     val += "  Little endian:  " + getCLDevPropBOOL(CL_DEVICE_ENDIAN_LITTLE);
@@ -196,18 +195,28 @@ void Dispatch(const std::vector<Platform> &plats, const std::vector<cl_context> 
         for(unsigned d = 0; d < plats[p].devices.size(); d++) {
             TestSubject imp(platContext[p], plats[p].devices[d].clid, concurrency);
             TestData test;
+            if(opt_verbose) std::cout<<"Testing "<<imp.identifier.Presentation()<<" on platform["<<p<<"].device["<<d<<"]\n";
             if(!test.CanRunTests(concurrency)) {
                 std::string msg(imp.identifier.Presentation());
                 msg += " cannot be tested with concurrency " + std::to_string(concurrency);
                 msg += ", not currently supposed to happen.";
                 throw msg;
             }
+            if(opt_verbose) {
+                for(asizei t = 0; t < test.GetNumTests(); t++) std::cout<<char('0' + t % 10);
+                std::cout<<std::endl;
+                test.onBlockHashed = [](asizei progress) { std::cout<<'.'; };
+            }
+            const auto start(std::chrono::system_clock::now());
             auto errors(test.RunTests(imp));
+            const auto finished(std::chrono::system_clock::now());
+            if(opt_verbose) std::cout<<std::endl;
             auto signature(imp.GetVersioningHash());
             const std::string errorHeader(Header(imp.identifier, signature) + Header(plats, p, d));
             if(errors.size()) {
                 if(errorLog.is_open() == false) {
-                    std::string fname(imp.identifier.Presentation() + '.' + Hex(signature) + ".txt");
+                    std::string fname('p' + std::to_string(p) + 'd' + std::to_string(d) + '-');
+                    fname += imp.identifier.Presentation() + '.' + Hex(signature) + ".txt";
                     errorLog.open(fname.c_str());
                     if(errorLog.is_open() == false) throw "Could not open error log file.";
                     errorLog<<errorHeader<<std::endl;
@@ -218,6 +227,7 @@ void Dispatch(const std::vector<Platform> &plats, const std::vector<cl_context> 
                     std::cout<<err<<std::endl;
                 }
             }
+            if(opt_showTestTime) std::cout<<"t="<<std::chrono::duration_cast<std::chrono::milliseconds>(finished - start).count()<<" ms"<<std::endl;
         }
     }
 }
@@ -226,15 +236,15 @@ void Dispatch(const std::vector<Platform> &plats, const std::vector<cl_context> 
 int main() {
     try {
         std::vector<Platform> plats(EnumeratePlatforms());
-        std::cout<<"Found "<<plats.size()<<" OpenCL platform"<<(plats.size() > 1? "s" : "")<<" for processing."<<std::endl;
+        if(opt_verbose) std::cout<<"Found "<<plats.size()<<" OpenCL platform"<<(plats.size() > 1? "s" : "")<<" for processing."<<std::endl;
         for(unsigned p = 0; p < plats.size(); p++) {
             if(!EnumerateGPUs(plats[p])) {
                 plats.erase(plats.begin() + p);
                 p--;
             }
-            else std::cout<<"Platform "<<plats[p].clIndex<<" counts "<<plats[p].devices.size()<<" device"<<(plats[p].devices.size() > 1? "s" : "")<<" to test."<<std::endl;
+            else if(opt_verbose) std::cout<<"Platform "<<plats[p].clIndex<<" counts "<<plats[p].devices.size()<<" device"<<(plats[p].devices.size() > 1? "s" : "")<<" to test."<<std::endl;
         }
-        std::cout<<"- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - "<<std::endl;
+        if(opt_verbose) std::cout<<"- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - "<<std::endl;
         std::vector<cl_context> platContext;
         platContext.reserve(plats.size());
         ScopedFuncCall relAllContext([&platContext]() { for(auto el = 0; el < platContext.size(); el++) clReleaseContext(platContext[el]); });

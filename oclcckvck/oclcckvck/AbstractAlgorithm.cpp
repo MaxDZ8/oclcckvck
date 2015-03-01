@@ -40,7 +40,7 @@ void AbstractAlgorithm::PrepareResources(ResourceRequest *resources, asizei numR
 }
 
 
-void AbstractAlgorithm::PrepareKernels(KernelRequest *kernels, asizei numKernels) {
+void AbstractAlgorithm::PrepareKernels(KernelRequest *kernels, asizei numKernels, cl_device_id dev) {
     // First of all, let's build a set of unique file names. Some algorithms load up the same file more than once.
     // Those are usually very few entries so it's probably faster using an array but set is easier.
     std::map<std::string, std::string> load;
@@ -77,25 +77,31 @@ void AbstractAlgorithm::PrepareKernels(KernelRequest *kernels, asizei numKernels
         progs[loop] = created;
 
         err = clBuildProgram(created, NULL, 0, kernels[loop].compileFlags.c_str(), NULL, NULL);
-        std::string errString;
-        if(err == CL_INVALID_BUILD_OPTIONS) errString = std::string("Bad build options for \"") + kernels[loop].fileName + '"';
-        else if(err != CL_SUCCESS) errString = std::string("OpenCL error ") + std::to_string(err) + "for \"" + kernels[loop].fileName + '"';
+        std::string errString;        if(err == CL_INVALID_BUILD_OPTIONS) {
+            errString = std::string("Invalid compile options \"");
+            errString += kernels[loop].compileFlags + "\" for ";
+            errString += kernels[loop].fileName + '.' + kernels[loop].entryPoint;
+        }
+        else if(err != CL_SUCCESS) {
+            errString = std::string("OpenCL error ") + std::to_string(err) + " for ";
+            errString += kernels[loop].fileName + '.' + kernels[loop].entryPoint + ", attempted compile with \"";
+            errString += kernels[loop].compileFlags + '"';
+        }
         if(errString.length()) {
-            cl_device_id sample;
-            err = clGetContextInfo(context, CL_CONTEXT_DEVICES, 1, &sample, NULL);
-            if(err != CL_SUCCESS) throw errString + "(also failed to get a sample device for context)";
-            std::vector<char> log(256);
+            std::vector<char> log;
             asizei requiredChars;
-            err = clGetProgramBuildInfo(created, sample, CL_PROGRAM_BUILD_LOG, log.size(), log.data(), &requiredChars);
-            if(requiredChars > log.size()) {
+            err = clGetProgramBuildInfo(created, dev, CL_PROGRAM_BUILD_LOG, 0, NULL, &requiredChars);
+            if(err != CL_SUCCESS) throw errString + " (also failed to call clGetProgramBuildInfo successfully)"; // unrecognized compile options meh
+            else {
                 log.resize(requiredChars);
-                err = clGetProgramBuildInfo(created, sample, CL_PROGRAM_BUILD_LOG, log.size(), log.data(), &requiredChars);
+                err = clGetProgramBuildInfo(created, dev, CL_PROGRAM_BUILD_LOG, log.size(), log.data(), &requiredChars);
+                if(err != CL_SUCCESS) throw errString + "(also failed to get build error log)";
+                throw errString + '\n' + "ERROR LOG:\n" + std::string(log.data(), requiredChars);
             }
-            if(err != CL_SUCCESS) throw errString + "(also failed to get build error log)";
-            throw errString + '\n' + "ERROR LOG:\n" + std::string(log.data(), requiredChars);
         }
     }
     this->kernels.reserve(numKernels);
+
     for(asizei loop = 0; loop < numKernels; loop++) {
         cl_int err;
         cl_kernel kern = clCreateKernel(progs[loop], kernels[loop].entryPoint.c_str(), &err);

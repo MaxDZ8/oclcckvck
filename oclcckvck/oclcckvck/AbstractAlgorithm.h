@@ -54,7 +54,7 @@ This has proven to be unnecessary.
 
 With the new design, there are no more settings objects nor 'algorithm instances': they are just an instance of some class implementing AbstractAlgorithm.
 
-Also, they're now dumb and set up at build time with full type information. External logic gets to select settings and device to use. 
+Also, they're now dumb and set up at build time with full type information. External logic gets to select settings and device to use.
 
 The way work is dispatched is also changed but that's better discussed in a derived class. At last, as OpenCL is very convincing I have decided to drop
 support for other APIs and eventually think at it again in the future: this is really AbstractCLAlgorithm. */
@@ -141,6 +141,18 @@ protected:
             memset(&channels, 0, sizeof(channels));
             memset(&imageDesc, 0, sizeof(imageDesc));
         }
+        ResourceRequest(const ResourceRequest &src) { // note: this is default copy ctor, it is fine... except not when this is an immediate
+            name = src.name;    // a better way to do this would be to have a base class (?)
+            bytes = src.bytes;
+            memFlags = src.memFlags;
+            initialData = src.initialData;
+            immediate = src.immediate;
+            memcpy_s(imValue, sizeof(imValue), src.imValue, sizeof(src.imValue));
+            channels = src.channels;
+            imageDesc = src.imageDesc;
+            presentationName = src.presentationName;
+            if(immediate) initialData = imValue;
+        }
     };
     //! This is syntactic sugar only. It is imperative this does not add subfields as ResourceRequests are often passed around by copy.
     template<typename scalar>
@@ -158,15 +170,15 @@ protected:
                    and thus require multiple devices. This extension is really only meaningful for a derived class.
     */
     AbstractAlgorithm(cl_context ctx, cl_device_id dev, const char *algo, const char *imp, const char *ver)
-        : identifier(algo, imp, ver), context(ctx), device(dev) { 
+        : identifier(algo, imp, ver), context(ctx), device(dev) {
     }
 
     /*! Derived classes are expected to call this somewhere in their ctor. It deals with allocating memory and eventually initializing it in a
     data-driven way. Note special resources cannot be created using this, at least in theory. Just create them in the ctor before PrepareKernels. */
     void PrepareResources(ResourceRequest *resources, asizei numResources, asizei hashCount);
 
-    //! Similarly, kernels are described by data and built by resolving the previously declared resources.
-    void PrepareKernels(KernelRequest *kernels, asizei numKernels);
+    //! Similarly, kernels are described by data and built by resolving the previously declared resources. Device used to pull out eventual error logs.
+    void PrepareKernels(KernelRequest *kernels, asizei numKernels, cl_device_id dev);
 
     struct KernelDriver : WorkGroupDimensionality {
         cl_kernel clk;
@@ -178,7 +190,7 @@ protected:
     std::vector<KernelDriver> kernels;
     std::vector<ResourceRequest> resRequests;
     std::map<std::string, cl_mem> resHandles;
-    
+
     struct {
         std::array<aubyte, 80> header;
         aulong nonceBase; //!< this is 64 bit and considered "exhausted" when over 32 bit range.
@@ -204,12 +216,12 @@ protected:
     };
 
     /*! This function returns false if the given name does not identify something recognized.
-    Otherwise, it will set desc. You can be sure at this point desc.resource will always be != 0. 
+    Otherwise, it will set desc. You can be sure at this point desc.resource will always be != 0.
     While there are no requirements on the special value names, please follow these guidelines:
     - All special value names start with '$'.
     - "$wuData" is the 80-bytes block header to hash. Yes, 80 bytes, even though we overwrite the last 4 (most of the time).
     - "$dispatchData" contains "other stuff" including targetbits... note those are probably going to be refactored as well.
-    - "$candidates" is the resulting nonce buffer. 
+    - "$candidates" is the resulting nonce buffer.
     Those can be bound early or dinamically, there's no requirement. */
     virtual bool SpecialValue(SpecialValueBinding &desc, const std::string &name) = 0;
 
