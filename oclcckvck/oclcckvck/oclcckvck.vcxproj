@@ -169,7 +169,6 @@
     <ClInclude Include="KnownConstantsProvider.h" />
     <ClInclude Include="NonceStructs.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="StopWaitAlgorithm.h" />
     <ClInclude Include="TestData\Fresh.h" />
     <ClInclude Include="TestData\MYRGRS.h" />
     <ClInclude Include="TestData\Neoscrypt.h" />

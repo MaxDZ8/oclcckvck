@@ -48,6 +48,8 @@ oclcckvck/Common/Debug/
 oclcckvck/Common/Release/
 oclcckvck/Common/x64/Debug/
 oclcckvck/Common/x64/Release/
+oclcckvck/SPH/x64/Debug/
+oclcckvck/SPH/x64/Release/
 oclcckvck/x64/
 *.aps
 *.idb
