@@ -152,18 +152,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\AlgoImplementations\FreshWarmCL12.h" />
-    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\AlgoImplementations\MYRGRSMonolithicCL12.h" />
-    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\AlgoImplementations\NeoscryptSmoothCL12.h" />
-    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\AlgoImplementations\QubitFiveStepsCL12.h" />
-    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\CubeHash_2W.h" />
-    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\Echo_8W.h" />
-    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\Luffa_1W.h" />
-    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\misc.h" />
-    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\NS_CoreLoops.h" />
-    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\NS_KDFs_4W.h" />
-    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\Shavite3_1W.h" />
-    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\SIMD_16W.h" />
+    <ClInclude Include="AlgoImplementations\FreshWarmCL12.h" />
+    <ClInclude Include="AlgoImplementations\MYRGRSMonolithicCL12.h" />
+    <ClInclude Include="AlgoImplementations\NeoscryptSmoothCL12.h" />
+    <ClInclude Include="AlgoImplementations\QubitFiveStepsCL12.h" />
+    <ClInclude Include="StepTest\CubeHash_2W.h" />
+    <ClInclude Include="StepTest\Echo_8W.h" />
+    <ClInclude Include="StepTest\Luffa_1W.h" />
+    <ClInclude Include="StepTest\misc.h" />
+    <ClInclude Include="StepTest\NS_CoreLoops.h" />
+    <ClInclude Include="StepTest\NS_KDFs_4W.h" />
+    <ClInclude Include="StepTest\Shavite3_1W.h" />
+    <ClInclude Include="StepTest\SIMD_16W.h" />
     <ClInclude Include="AbstractAlgorithm.h" />
     <ClInclude Include="AlgoTest.h" />
     <ClInclude Include="KnownConstantsProvider.h" />
