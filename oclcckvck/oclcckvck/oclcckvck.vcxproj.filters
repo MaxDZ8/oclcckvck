@@ -108,10 +108,10 @@
     <ClCompile Include="TestData\Qubit.cpp">
       <Filter>Code\TestData</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\NS_CoreLoops.cpp">
+    <ClCompile Include="StepTest\NS_CoreLoops.cpp">
       <Filter>Code\StepTest</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\NS_KDFs_4W.cpp">
+    <ClCompile Include="StepTest\NS_KDFs_4W.cpp">
       <Filter>Code\StepTest</Filter>
     </ClCompile>
   </ItemGroup>

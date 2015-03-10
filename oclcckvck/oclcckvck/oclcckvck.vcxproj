@@ -189,10 +189,10 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\NS_CoreLoops.cpp" />
-    <ClCompile Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\NS_KDFs_4W.cpp" />
     <ClCompile Include="AbstractAlgorithm.cpp" />
     <ClCompile Include="oclcckvck.cpp" />
+    <ClCompile Include="StepTest\NS_CoreLoops.cpp" />
+    <ClCompile Include="StepTest\NS_KDFs_4W.cpp" />
     <ClCompile Include="TestData\Fresh.cpp" />
     <ClCompile Include="TestData\MYRGRS.cpp" />
     <ClCompile Include="TestData\Neoscrypt.cpp" />
