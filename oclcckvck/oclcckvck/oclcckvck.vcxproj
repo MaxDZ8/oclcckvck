@@ -122,7 +122,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>TEST_LUFFA_1W_HEAD;TEST_CUBEHASH_2W_CHAINED;TEST_SHAVITE3_1W_CHAINED;TEST_SIMD_16W_CHAINED;TEST_ECHO_8W_TAIL;TEST_NS_FIRSTKDF_4W_HEAD;TEST_NS_SW_SALSA;TEST_NS_SW_CHACHA;TEST_NS_IR_SALSA;TEST_NS_IR_CHACHA;TEST_NS_LASTKDF_4W_TAIL;TEST_QUBIT_FIVESTEPS;TEST_MYRGRS_MONOLITHIC;TEST_FRESH_WARM;TEST_NEOSCRYPT_SMOOTH;WIN32;NDEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
     </ClCompile>
     <Link>
@@ -140,7 +140,7 @@
       <Optimization>MinSpace</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>TEST_LUFFA_1W_HEAD;TEST_CUBEHASH_2W_CHAINED;TEST_SHAVITE3_1W_CHAINED;TEST_SIMD_16W_CHAINED;TEST_ECHO_8W_TAIL;TEST_NS_FIRSTKDF_4W_HEAD;TEST_NS_SW_SALSA;TEST_NS_SW_CHACHA;TEST_NS_IR_SALSA;TEST_NS_IR_CHACHA;TEST_NS_LASTKDF_4W_TAIL;TEST_QUBIT_FIVESTEPS;TEST_MYRGRS_MONOLITHIC;TEST_FRESH_WARM;TEST_NEOSCRYPT_SMOOTH;WIN32;NDEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
     </ClCompile>
     <Link>
@@ -152,11 +152,19 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\AlgoImplementations\FreshWarmCL12.h" />
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\AlgoImplementations\MYRGRSMonolithicCL12.h" />
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\AlgoImplementations\NeoscryptSmoothCL12.h" />
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\AlgoImplementations\QubitFiveStepsCL12.h" />
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\CubeHash_2W.h" />
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\Echo_8W.h" />
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\Luffa_1W.h" />
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\misc.h" />
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\NS_CoreLoops.h" />
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\NS_KDFs_4W.h" />
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\Shavite3_1W.h" />
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\SIMD_16W.h" />
     <ClInclude Include="AbstractAlgorithm.h" />
-    <ClInclude Include="AlgoImplementations\FreshWarmCL12.h" />
-    <ClInclude Include="AlgoImplementations\MYRGRSMonolithicCL12.h" />
-    <ClInclude Include="AlgoImplementations\NeoscryptSmoothCL12.h" />
-    <ClInclude Include="AlgoImplementations\QubitFiveStepsCL12.h" />
     <ClInclude Include="AlgoTest.h" />
     <ClInclude Include="KnownConstantsProvider.h" />
     <ClInclude Include="NonceStructs.h" />
@@ -177,8 +185,13 @@
     <ProjectReference Include="..\Common\Common.vcxproj">
       <Project>{7ce00c42-3136-4368-98f9-43a68598df33}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\SPH\SPH.vcxproj">
+      <Project>{2589cc41-a8be-4dc0-be56-e30e31ae6533}</Project>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\NS_CoreLoops.cpp" />
+    <ClCompile Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\NS_KDFs_4W.cpp" />
     <ClCompile Include="AbstractAlgorithm.cpp" />
     <ClCompile Include="oclcckvck.cpp" />
     <ClCompile Include="TestData\Fresh.cpp" />

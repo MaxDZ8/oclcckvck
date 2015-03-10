@@ -14,6 +14,9 @@
     <Filter Include="Code\TestData">
       <UniqueIdentifier>{7382aadb-ff7f-47dd-81a3-bf2f23f283b4}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Code\StepTest">
+      <UniqueIdentifier>{6397bddf-3afb-4c55-b890-e2142a73fc6f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h" />
@@ -32,18 +35,6 @@
     <ClInclude Include="StopWaitAlgorithm.h">
       <Filter>Code</Filter>
     </ClInclude>
-    <ClInclude Include="AlgoImplementations\QubitFiveStepsCL12.h">
-      <Filter>Code\AlgoImplementations</Filter>
-    </ClInclude>
-    <ClInclude Include="AlgoImplementations\FreshWarmCL12.h">
-      <Filter>Code\AlgoImplementations</Filter>
-    </ClInclude>
-    <ClInclude Include="AlgoImplementations\MYRGRSMonolithicCL12.h">
-      <Filter>Code\AlgoImplementations</Filter>
-    </ClInclude>
-    <ClInclude Include="AlgoImplementations\NeoscryptSmoothCL12.h">
-      <Filter>Code\AlgoImplementations</Filter>
-    </ClInclude>
     <ClInclude Include="TestData\Fresh.h">
       <Filter>Code\TestData</Filter>
     </ClInclude>
@@ -55,6 +46,42 @@
     </ClInclude>
     <ClInclude Include="TestData\Qubit.h">
       <Filter>Code\TestData</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\AlgoImplementations\MYRGRSMonolithicCL12.h">
+      <Filter>Code\AlgoImplementations</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\AlgoImplementations\NeoscryptSmoothCL12.h">
+      <Filter>Code\AlgoImplementations</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\AlgoImplementations\QubitFiveStepsCL12.h">
+      <Filter>Code\AlgoImplementations</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\AlgoImplementations\FreshWarmCL12.h">
+      <Filter>Code\AlgoImplementations</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\NS_KDFs_4W.h">
+      <Filter>Code\StepTest</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\Shavite3_1W.h">
+      <Filter>Code\StepTest</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\SIMD_16W.h">
+      <Filter>Code\StepTest</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\CubeHash_2W.h">
+      <Filter>Code\StepTest</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\Echo_8W.h">
+      <Filter>Code\StepTest</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\Luffa_1W.h">
+      <Filter>Code\StepTest</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\misc.h">
+      <Filter>Code\StepTest</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\NS_CoreLoops.h">
+      <Filter>Code\StepTest</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -85,6 +112,12 @@
     </ClCompile>
     <ClCompile Include="TestData\Qubit.cpp">
       <Filter>Code\TestData</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\NS_CoreLoops.cpp">
+      <Filter>Code\StepTest</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\Visual Studio 2013\Projects\oclcckvck\oclcckvck\StepTest\NS_KDFs_4W.cpp">
+      <Filter>Code\StepTest</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
