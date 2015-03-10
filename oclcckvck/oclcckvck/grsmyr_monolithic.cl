@@ -289,7 +289,7 @@ constant ulong T7[256] = {
     0x03038f068a8f8a89, 0x5959f8b213f8134a, 0x090980129b809b92, 0x1a1a173439173923, 0x6565daca75da7510, 0xd7d731b553315384, 0x8484c61351c651d5, 0xd0d0b8bbd3b8d303,
     0x8282c31f5ec35edc, 0x2929b052cbb0cbe2, 0x5a5a77b4997799c3, 0x1e1e113c3311332d, 0x7b7bcbf646cb463d, 0xa8a8fc4b1ffc1fb7, 0x6d6dd6da61d6610c, 0x2c2c3a584e3a4e62
 };
-  
+
 
 #else /* big endian */
 
@@ -495,8 +495,8 @@ ulong Q_round(ulong *src, uint base, local ulong *t0, local ulong *t1, local ulo
     uint b7 = (base +  6) % 16;
     return t0[B64_0(src[b0])] ^ t1[B64_1(src[b1])] ^ t2[B64_2(src[b2])] ^ t3[B64_3(src[b3])] ^
            t4[B64_4(src[b4])] ^ t5[B64_5(src[b5])] ^ T6[B64_6(src[b6])] ^ T7[B64_7(src[b7])];
-}    
-    
+}
+
 
 void groestl(ulong *hashOut, local ulong *tables, global uchar *header, global uint *roundCount) {
     local ulong *t0 = tables + 256 * 0;        local ulong *t1 = tables + 256 * 1;
@@ -540,7 +540,7 @@ void groestl(ulong *hashOut, local ulong *tables, global uchar *header, global u
         for(int i = 0; i < 16; i++) t[i] = Q_round(m, i, t0, t1, t2, t3, t4, t5);
         #pragma unroll
         for(int i = 0; i < 16; i++) m[i] = t[i];
-        
+
     }
     for (unsigned int u = 0; u < 16; u ++) H[u] ^= g[u] ^ m[u];
     ulong xH[16];
@@ -594,7 +594,7 @@ void SHARound_Set(uint8 *v, uint *w, constant uint *k) {
         temp += S3(vals.s4) + F1(vals.s4, vals.s5, vals.s6);
         vals.s3 += temp;
         vals.s7 = temp + S2(vals.s0) + F0(vals.s0, vals.s1, vals.s2);
-        
+
         vals = vals.s70123456; // hopefully the compiler unrolls this for me
     }
     *v = vals;
@@ -613,7 +613,7 @@ void SHARound_Update(uint8 *v, uint *w, constant uint *k) {
         temp += S3(vals.s4) + F1(vals.s4, vals.s5, vals.s6);
         vals.s3 += temp;
         vals.s7 = temp + S2(vals.s0) + F0(vals.s0, vals.s1, vals.s2);
-        
+
         vals = vals.s70123456; // hopefully the compiler unrolls this for me
     }
     *v = vals;
@@ -633,7 +633,7 @@ void SHARound_Update_Last(uint8 *v, uint *w, constant uint *k) {
         temp += S3(vals.s4) + F1(vals.s4, vals.s5, vals.s6);
         vals.s3 += temp;
         vals.s7 = temp + S2(vals.s0) + F0(vals.s0, vals.s1, vals.s2);
-        
+
         vals = vals.s70123456;
     }
     #pragma unroll
@@ -643,7 +643,7 @@ void SHARound_Update_Last(uint8 *v, uint *w, constant uint *k) {
         temp += S3(vals.s4) + F1(vals.s4, vals.s5, vals.s6);
         vals.s3 += temp;
         vals.s7 = temp + S2(vals.s0) + F0(vals.s0, vals.s1, vals.s2);
-        
+
         vals = vals.s70123456;
     }
     *v = vals;
@@ -659,7 +659,7 @@ void SHAHalfRound_Constant(uint8 *v, constant uint *w, constant uint *k) {
         temp += S3(vals.s4) + F1(vals.s4, vals.s5, vals.s6);
         vals.s3 += temp;
         vals.s7 = temp + S2(vals.s0) + F0(vals.s0, vals.s1, vals.s2);
-        
+
         vals = vals.s70123456; // hopefully the compiler unrolls this for me
     }
     *v = vals;
@@ -702,8 +702,8 @@ constant uint WK[8][8] = {
     {
         0x00000000, 0x00000000,    0x00000000, 0x00000000,
         0x00000000, 0x00000000,    0x00000000, 0x00000200
-    },                                                                                   
-    {                                                                                    
+    },
+    {
         0x80000000, 0x01400000,    0x00205000, 0x00005088,
         0x22000800, 0x22550014,    0x05089742, 0xa0000020
     },
@@ -755,7 +755,7 @@ void sha256(uint *hio, uint updateRoundsLooped, uint constRoundPairs) {
         0x510E527F, 0x9B05688C,    0x1F83D9AB, 0x5BE0CD19
     );
     const uint8 firstHash = hash;
-    
+
     for(uint i = 0; i < constRoundPairs; i++) {
         SHAHalfRound_Constant(&hash, WK[i * 2 + 0], K[i] + 0);
         SHAHalfRound_Constant(&hash, WK[i * 2 + 1], K[i] + 8);
@@ -768,7 +768,7 @@ void sha256(uint *hio, uint updateRoundsLooped, uint constRoundPairs) {
         temp += S3(hash.s4) + F1(hash.s4, hash.s5, hash.s6);
         hash.s3 += temp;
         hash.s7 = temp + S2(hash.s0) + F0(hash.s0, hash.s1, hash.s2);
-        
+
         hash = hash.s70123456; // hopefully the compiler unrolls this for me
     }
     hash = hash.s45670123;
@@ -798,8 +798,12 @@ kernel void grsmyr_monolithic(global uint *found, global uint *wuData, global ui
     groestl(hash.quad, tables, (global uchar*)wuData, roundCount);
     sha256(hash.dword, roundCount[3], roundCount[4]);
     ulong target = (((ulong)dispatchData[1]) << 32) | dispatchData[2]; // watch out for endianess!
-    if(hash.quad[3] <= target) {        
+    if(hash.quad[3] <= target) {
         uint storage = atomic_inc(found);
-        found[storage + 1] = as_uint(as_char4(get_global_id(0)).wzyx); // watch out for endianess!
+        found++;
+        found += storage * 9;
+        found[0] = as_uint(as_char4(get_global_id(0)).wzyx); // watch out for endianess!
+        for(uint cp = 0; cp < 8; cp++) found[1 + cp] = hash.dword[cp];
+        
     }
 }

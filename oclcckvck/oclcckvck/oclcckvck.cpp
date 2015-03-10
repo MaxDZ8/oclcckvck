@@ -13,34 +13,65 @@ This program runs M8M kernels with a known input obtained from a legacy miner. T
 This program only goal is to assess validity/compatibility, not performance. It is in that regard much more focused than the tool used internally during M8M development,
 which (arguably) does both and will hopefully be superceded by this one. */
 #include <CL/cl.h>
-#include "../Common/aes.h"
 #include <chrono>
-#include <strstream>
+#include <sstream>
 #include <vector>
 #include <iostream>
 #include <string>
+#include <fstream>
+#include "AbstractAlgorithm.h"
+#include "StopWaitDispatcher.h"
+#include "misc.h"
+#include "StepTest/misc.h"
 
 
-#if TEST_QUBIT_FIVESTEPS
+#if defined(TEST_QUBIT_FIVESTEPS)
 #include "TestData/Qubit.h"
 #include "AlgoImplementations/QubitFiveStepsCL12.h"
 #endif
 
-#if TEST_MYRGRS_MONOLITHIC
+#if defined(TEST_MYRGRS_MONOLITHIC)
 #include "TestData/MYRGRS.h"
 #include "AlgoImplementations/MYRGRSMonolithicCL12.h"
 #endif
 
-#if TEST_FRESH_WARM
+#if defined(TEST_FRESH_WARM)
 #include "TestData/Fresh.h"
 #include "AlgoImplementations/FreshWarmCL12.h"
 #endif
 
-#if TEST_NEOSCRYPT_SMOOTH
+#if defined(TEST_NEOSCRYPT_SMOOTH)
 #include "TestData/Neoscrypt.h"
 #include "AlgoImplementations/NeoscryptSmoothCL12.h"
 #endif
 
+#if defined(TEST_LUFFA_1W_HEAD)
+#include "StepTest/Luffa_1W.h"
+#endif
+
+#if defined(TEST_CUBEHASH_2W_CHAINED)
+#include "StepTest/CubeHash_2W.h"
+#endif
+
+#if defined(TEST_SHAVITE3_1W_CHAINED)
+#include "StepTest/Shavite3_1W.h"
+#endif
+
+#if defined(TEST_SIMD_16W_CHAINED)
+#include "StepTest/SIMD_16W.h"
+#endif
+
+#if defined(TEST_ECHO_8W_TAIL)
+#include "StepTest/ECHO_8W.h"
+#endif
+
+#if defined(TEST_NS_FIRSTKDF_4W_HEAD) || defined(TEST_NS_LASTKDF_4W_TAIL)
+#include "StepTest/NS_KDFs_4W.h"
+#endif
+
+#if defined(TEST_NS_SW_SALSA) || defined(TEST_NS_IR_SALSA) || defined(TEST_NS_SW_CHACHA) || defined(TEST_NS_IR_CHACHA)
+#include "StepTest/NS_CoreLoops.h"
+#endif
 
 bool opt_verbose = true;
 bool opt_showTestTime = true;
@@ -103,29 +134,11 @@ bool EnumerateGPUs(Platform &plat) {
 }
 
 
-std::string Hex(const aubyte *blob, asizei count) {
-    const char *hex = "0123456789abcdef";
-    std::string build;
-    for(asizei i = 0; i < count; i++) {
-        auto c = blob[i];
-        build += hex[c >> 4];
-        build += hex[c & 0x0F];
-    }
-    return build;
-}
-
-
-template<typename POD>
-std::string Hex(const POD &blob) {
-    return Hex(reinterpret_cast<const aubyte*>(&blob), sizeof(blob));
-}
-
-
-std::string Header(const AlgoIdentifier &id, aulong signature) {
+std::string Header(const AlgoIdentifier &id, const std::string &signature) {
     std::string val;
     val += "Algorithm:      " + id.algorithm + '\n';
     val += "Implementation: " + id.implementation + '\n';
-    val += "Signature:      " + Hex(signature) + '\n';
+    val += "Signature:      " + signature + '\n';
     return val;
 }
 
@@ -151,7 +164,7 @@ std::string Header(const std::vector<Platform> &plats, asizei plat, asizei dev) 
         buff.resize(required);
         cl_int err = clGetPlatformInfo(platform, what, buff.size(), buff.data(), &required);
         if(err != CL_SUCCESS) return "<ERROR>";
-        return std::string(buff.data(), required) + '\n';
+        return std::string(buff.data(), required - 1) + '\n';
     };
     auto getCLDevPropUINT  = [device](cl_device_info what) -> std::string { return std::to_string(GetCLDevProp<cl_uint>(what, device)) + '\n'; };
     auto getCLDevPropULONG = [device](cl_device_info what) -> std::string { return std::to_string(GetCLDevProp<cl_ulong>(what, device)) + '\n'; };
@@ -162,7 +175,7 @@ std::string Header(const std::vector<Platform> &plats, asizei plat, asizei dev) 
         buff.resize(required);
         cl_int err = clGetDeviceInfo(device, what, buff.size(), buff.data(), &required);
         if(err != CL_SUCCESS) return "<ERROR>";
-        return std::string(buff.data(), required) + '\n';
+        return std::string(buff.data(), required - 1) + '\n';
     };
     std::string val("Device platform [" + std::to_string(plat) + "]\n");
     val += "  Name:       " + getCLPlatProp(CL_PLATFORM_NAME);
@@ -188,48 +201,223 @@ std::string Header(const std::vector<Platform> &plats, asizei plat, asizei dev) 
 }
 
 
+void Whoops(std::ofstream &errorLog, const std::string &filename, const char *msg) {
+    if(errorLog.is_open() == false) {
+        std::string fname(filename.c_str());
+        errorLog.open(fname.c_str());
+        if(errorLog.is_open() == false) throw "Could not open error log file.";
+    }
+    errorLog<<msg<<std::endl;
+    throw std::string(msg);
+}
+
+
 template<typename TestData, typename TestSubject>
 void Dispatch(const std::vector<Platform> &plats, const std::vector<cl_context> &platContext, asizei concurrency) {
     std::ofstream errorLog;
     for(unsigned p = 0; p < plats.size(); p++) {
         for(unsigned d = 0; d < plats[p].devices.size(); d++) {
             TestSubject imp(platContext[p], plats[p].devices[d].clid, concurrency);
-            TestData test;
-            if(opt_verbose) std::cout<<"Testing "<<imp.identifier.Presentation()<<" on platform["<<p<<"].device["<<d<<"]\n";
-            if(!test.CanRunTests(concurrency)) {
-                std::string msg(imp.identifier.Presentation());
-                msg += " cannot be tested with concurrency " + std::to_string(concurrency);
-                msg += ", not currently supposed to happen.";
-                throw msg;
-            }
-            if(opt_verbose) {
-                for(asizei t = 0; t < test.GetNumTests(); t++) std::cout<<char('0' + t % 10);
-                std::cout<<std::endl;
-                test.onBlockHashed = [](asizei progress) { std::cout<<'.'; };
-            }
-            const auto start(std::chrono::system_clock::now());
-            auto errors(test.RunTests(imp));
-            const auto finished(std::chrono::system_clock::now());
-            if(opt_verbose) std::cout<<std::endl;
-            auto signature(imp.GetVersioningHash());
-            const std::string errorHeader(Header(imp.identifier, signature) + Header(plats, p, d));
-            if(errors.size()) {
-                if(errorLog.is_open() == false) {
-                    std::string fname('p' + std::to_string(p) + 'd' + std::to_string(d) + '-');
-                    fname += imp.identifier.Presentation() + '.' + Hex(signature) + ".txt";
-                    errorLog.open(fname.c_str());
-                    if(errorLog.is_open() == false) throw "Could not open error log file.";
-                    errorLog<<errorHeader<<std::endl;
+            StopWaitDispatcher dispatcher(imp);
+            auto presentation(imp.identifier.Presentation());
+            std::string hexSign;
+            auto filename = [p, d, &presentation, &hexSign]() -> std::string {
+                std::string ret('p' + std::to_string(p) + 'd' + std::to_string(d) + '-' + presentation);
+                if(hexSign.length()) ret += hexSign;
+                else ret += "failed initialization";
+                return ret + ".txt";
+            };
+            try {
+                auto errors(imp.Init(dispatcher.AsValueProvider()));
+                hexSign = imp.GetVersioningHash()? Hex(imp.GetVersioningHash()) : std::string("-failed_to_init");
+                if(errors.size()) {
+                    std::string meh;
+                    for(auto err : errors) meh += err + "\n\n";
+                    throw meh;
                 }
-                std::cout<<errorHeader<<std::endl;
-                for(auto err : errors) {
-                    errorLog<<err<<std::endl;
-                    std::cout<<err<<std::endl;
+                TestData test;
+                if(opt_verbose) std::cout<<"Testing "<<presentation<<" ("<<hexSign<<") on platform["<<p<<"].device["<<d<<"]\n";
+                if(!test.CanRunTests(concurrency)) {
+                    std::string msg(presentation);
+                    msg += " cannot be tested with concurrency " + std::to_string(concurrency);
+                    msg += ", not currently supposed to happen.";
+                    throw msg;
                 }
+                if(opt_verbose) {
+                    for(asizei t = 0; t < test.GetNumTests(); t++) std::cout<<char('0' + t % 10);
+                    std::cout<<std::endl;
+                    test.onBlockHashed = [](asizei progress) { std::cout<<'.'; };
+                }
+                const auto start(std::chrono::system_clock::now());
+                try {
+                    errors = test.RunTests(dispatcher);
+                } catch(const std::string &msg) {
+                    errors.push_back(msg);
+                } catch(const char *msg) {
+                    errors.push_back(msg);
+                }
+                const auto finished(std::chrono::system_clock::now());
+                if(errors.size()) {
+                    std::string allErrors(Header(imp.identifier, hexSign) + Header(plats, p, d));
+                    for(auto err : errors) allErrors += err;
+                    throw allErrors;
+                }
+                if(opt_verbose) std::cout<<std::endl;
+                if(opt_showTestTime) std::cout<<"t="<<std::chrono::duration_cast<std::chrono::milliseconds>(finished - start).count()<<" ms"<<std::endl;
+            } catch(const std::string &msg) {
+                Whoops(errorLog, filename(), msg.c_str());
+            } catch(const char *msg) {
+                Whoops(errorLog, filename(), msg);
             }
-            if(opt_showTestTime) std::cout<<"t="<<std::chrono::duration_cast<std::chrono::milliseconds>(finished - start).count()<<" ms"<<std::endl;
         }
     }
+}
+
+
+template<typename StepComparator>
+void Compare(const std::vector<Platform> &plats, const std::vector<cl_context> &platContext, asizei concurrency) {
+    std::ofstream errorLog;
+    for(unsigned p = 0; p < plats.size(); p++) {
+        for(unsigned d = 0; d < plats[p].devices.size(); d++) {
+            StepComparator test(platContext[p], plats[p].devices[d].clid, concurrency);
+            StopWaitDispatcher dispatcher(test.algo);
+            test.MakeInputData(dispatcher);
+            auto presentation(test.algo.identifier.Presentation());
+            std::string hexSign;
+            auto filename = [p, d, &presentation, &hexSign]() -> std::string {
+                std::string ret('p' + std::to_string(p) + 'd' + std::to_string(d) + '-' + presentation);
+                if(hexSign.length()) ret += hexSign;
+                else ret += "failed initialization";
+                return ret + ".txt";
+            };
+            try {
+                auto errors(test.algo.Init(dispatcher.AsValueProvider()));
+                hexSign = test.algo.GetVersioningHash()? Hex(test.algo.GetVersioningHash()) : std::string("-failed_to_init");
+                if(errors.size()) {
+                    std::string meh;
+                    for(auto err : errors) meh += err + "\n\n";
+                    throw meh;
+                }
+                if(opt_verbose) std::cout<<"Testing "<<presentation<<" ("<<hexSign<<") on platform["<<p<<"].device["<<d<<"]\n";
+                // It is assumed steps complete in a single dispatch so no need to iterate up to producing results!
+                std::vector<cl_event> blockers;
+                while(dispatcher.Tick(blockers) != AlgoEvent::working) { }
+                dispatcher.GetEvents(blockers);
+                if(blockers.size()) { // step tests can still blocking map.
+                    clWaitForEvents(cl_uint(blockers.size()), blockers.data());
+                }
+                typedef std::array<aubyte, 64> Hash;
+                auto bad(test.Check(dispatcher));
+                if(bad.Failed()) throw bad.Describe(test.algo.hashCount);
+            } catch(const std::string &msg) {
+                Whoops(errorLog, filename(), msg.c_str());
+            } catch(const char *msg) {
+                Whoops(errorLog, filename(), msg);
+            }
+        }
+    }
+}
+
+
+void AlgoTests(const std::vector<Platform> &plats, const std::vector<cl_context> &platContext) {
+#if defined(TEST_QUBIT_FIVESTEPS)
+    try {
+        const asizei concurrency = 1024 * 16;
+        Dispatch<testData::Qubit, algoImplementations::QubitFiveStepsCL12>(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl; }
+#endif
+#if defined(TEST_MYRGRS_MONOLITHIC)
+    try {
+        const asizei concurrency = 1024 * 16;
+        Dispatch<testData::MYRGRS, algoImplementations::MYRGRSMonolithicCL12>(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl; }
+#endif
+#if defined(TEST_FRESH_WARM)
+    try {
+        const asizei concurrency = 1024 * 16;
+        Dispatch<testData::Fresh, algoImplementations::FreshWarmCL12>(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl; }
+#endif
+#if defined(TEST_NEOSCRYPT_SMOOTH)
+    try {
+        const asizei concurrency = 1024 * 4;
+        Dispatch<testData::Neoscrypt, algoImplementations::NeoscryptSmoothCL12>(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl; }
+#endif
+}
+
+
+
+bool StepTests(const std::vector<Platform> &plats, const std::vector<cl_context> &platContext) {
+    bool failed = false;
+    using namespace stepTest;
+#if defined(TEST_LUFFA_1W_HEAD)
+    try {
+        const asizei concurrency = 1024 * 16 * 4;
+        Compare< HeadTest<Luffa_1W> >(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl;    failed = true; }
+#endif
+#if defined(TEST_CUBEHASH_2W_CHAINED)
+    try {
+        const asizei concurrency = 1024 * 16 * 4;
+        Compare< StepTest< CubeHash_2W> >(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl;    failed = true; }
+#endif
+#if defined(TEST_SHAVITE3_1W_CHAINED)
+    try {
+        const asizei concurrency = 1024 * 16 * 4;
+        Compare< StepTest< ShaVite3_1W> >(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl;    failed = true; }
+#endif
+#if defined(TEST_SIMD_16W_CHAINED)
+    try {
+        const asizei concurrency = 1024 * 16 * 4;
+        Compare< StepTest<SIMD_16W> >(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl;    failed = true; }
+#endif
+#if defined(TEST_ECHO_8W_TAIL)
+    try {
+        const asizei concurrency = 1024 * 16 * 4;
+        Compare< TailTest<ECHO_8W> >(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl;    failed = true; }
+#endif
+#if defined(TEST_NS_FIRSTKDF_4W_HEAD)
+    try {
+        const asizei concurrency = 1024 * 16 * 4;
+        Compare< HeadTest<NS_FirstKDF_4W> >(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl;    failed = true; }
+#endif
+#if defined(TEST_NS_SW_SALSA)
+    try {
+        const asizei concurrency = 1024 * 8;
+        Compare< StepTest< NS_SW<nsHelp::Salsa> > >(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl;    failed = true; }
+#endif
+#if defined(TEST_NS_IR_SALSA)
+    try {
+        const asizei concurrency = 1024 * 8;
+        Compare< StepTest< NS_IR<nsHelp::Salsa> > >(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl;    failed = true; }
+#endif
+#if defined(TEST_NS_SW_CHACHA)
+    try {
+        const asizei concurrency = 1024 * 8;
+        Compare< StepTest< NS_SW<nsHelp::Chacha> > >(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl;    failed = true; }
+#endif
+#if defined(TEST_NS_IR_CHACHA)
+    try {
+        const asizei concurrency = 1024 * 8;
+        Compare< StepTest< NS_IR<nsHelp::Chacha> > >(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl;    failed = true; }
+#endif
+#if defined(TEST_NS_FASTKDF_4W_TAIL)
+    try {
+        const asizei concurrency = 1024 * 16 * 4;
+        Compare< TailTest<NS_LastKDF_4W> >(plats, platContext, concurrency);
+    } catch(const std::string &what) { std::cout<<what<<std::endl;    failed = true; }
+#endif
+    return !failed;
 }
 
 
@@ -264,30 +452,10 @@ int main() {
             cl_context ctx = clCreateContext(ctxprops, cl_uint(devs.size()), devs.data(), errorFunc, plats.data() + p, &err);
             platContext.push_back(ctx); // reserved, cannot fail
         }
-    #if TEST_QUBIT_FIVESTEPS
-        {
-            const asizei concurrency = 1024 * 16;
-            Dispatch<testData::Qubit, algoImplementations::QubitFiveStepsCL12>(plats, platContext, concurrency);
-        }
-    #endif
-    #if TEST_MYRGRS_MONOLITHIC
-        {
-            const asizei concurrency = 1024 * 16;
-            Dispatch<testData::MYRGRS, algoImplementations::MYRGRSMonolithicCL12>(plats, platContext, concurrency);
-        }
-    #endif
-    #if TEST_FRESH_WARM
-        {
-            const asizei concurrency = 1024 * 16;
-            Dispatch<testData::Fresh, algoImplementations::FreshWarmCL12>(plats, platContext, concurrency);
-        }
-    #endif
-    #if TEST_NEOSCRYPT_SMOOTH
-        {
-            const asizei concurrency = 1024 * 4;
-            Dispatch<testData::Neoscrypt, algoImplementations::NeoscryptSmoothCL12>(plats, platContext, concurrency);
-        }
-    #endif
+        bool algoTests = true;
+        const bool stepTests = true;
+        if(stepTests) algoTests &= StepTests(plats, platContext);
+        if(algoTests) AlgoTests(plats, platContext);
     } catch(const char *msg) { std::cout<<msg<<std::endl; }
     catch(const std::string &msg) { std::cout<<msg<<std::endl; }
     return 0;

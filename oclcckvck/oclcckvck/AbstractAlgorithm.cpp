@@ -6,60 +6,82 @@
 #include "AbstractAlgorithm.h"
 
 
-void AbstractAlgorithm::PrepareResources(ResourceRequest *resources, asizei numResources, asizei hashCount) {
+std::vector<std::string> AbstractAlgorithm::PrepareResources(ResourceRequest *resources, asizei numResources, asizei hashCount, const AbstractSpecialValuesProvider &prov) {
+    std::vector<std::string> errors;
     for(auto res = resources; res != resources + numResources; res++) {
         if(resHandles.find(res->name) != resHandles.cend()) throw std::string("Duplicated resource name \"" + res->name + '"');
-        if(res->name[0] == '$') throw "Trying to allocate a special resource, not supported.";
+        if(prov.SpecialValue(res->name)) {
+            errors.push_back("Trying to allocate special resource \"" + res->name + "\" from algorithm, invalid operation.");
+            continue;
+        }
         resRequests.push_back(*res);
         if(res->immediate) continue; // nothing to allocate here
         ScopedFuncCall popLast([this]() { resRequests.pop_back(); });
         cl_mem build = 0;
+        ScopedFuncCall relMem([&build]() { if(build) clReleaseMemObject(build); });
         cl_int err = 0;
+        asizei count = errors.size();
         if(res->imageDesc.image_width) {
             build = clCreateImage(context, res->memFlags, &res->channels, &res->imageDesc, &res->initialData, &err);
-            if(err == CL_INVALID_VALUE) throw std::string("Invalid flags specified for \"") + res->name + '"';
-            else if(err == CL_INVALID_IMAGE_FORMAT_DESCRIPTOR)  throw std::string("Invalid image format descriptor for \"") + res->name + '"';
-            else if(err == CL_INVALID_IMAGE_DESCRIPTOR) throw std::string("Invalid image descriptor for \"") + res->name + '"';
-            else if(err == CL_INVALID_IMAGE_SIZE) throw std::string("Image \"") + res->name + "\" is too big!";
-            else if(err == CL_INVALID_HOST_PTR) throw std::string("Invalid host data for \"") + res->name + '"';
-            else if(err == CL_IMAGE_FORMAT_NOT_SUPPORTED) throw std::string("Invalid image format for \"") + res->name + '"';
-            else if(err != CL_SUCCESS) throw std::string("Some error while creating \"") + res->name + '"';
+            if(err == CL_INVALID_VALUE) errors.push_back("Invalid flags specified for \"" + res->name + '"');
+            else if(err == CL_INVALID_IMAGE_FORMAT_DESCRIPTOR)  errors.push_back("Invalid image format descriptor for \"" + res->name + '"');
+            else if(err == CL_INVALID_IMAGE_DESCRIPTOR) errors.push_back("Invalid image descriptor for \"" + res->name + '"');
+            else if(err == CL_INVALID_IMAGE_SIZE) errors.push_back("Image \"" + res->name + "\" is too big!");
+            else if(err == CL_INVALID_HOST_PTR) errors.push_back("Invalid host data for \"" + res->name + '"');
+            else if(err == CL_IMAGE_FORMAT_NOT_SUPPORTED) errors.push_back("Invalid image format for \"" + res->name + '"');
+            else if(err != CL_SUCCESS) errors.push_back("Some error while creating \"" + res->name + "\")");
+            if(errors.size() != count) continue;
         }
         else {
-            build = clCreateBuffer(context, res->memFlags, res->bytes, const_cast<aubyte*>(res->initialData), &err);
-            if(err == CL_INVALID_VALUE) throw std::string("Invalid flags specified for \"") + res->name + '"';
-            else if(err == CL_INVALID_BUFFER_SIZE) throw std::string("Buffer size for \"") + res->name + "\" is zero";
-            else if(err == CL_INVALID_HOST_PTR) throw std::string("Invalid host data for \"") + res->name + '"';
-            else if(err != CL_SUCCESS) throw std::string("Some error while creating \"") + res->name + '"';
+            cl_uint extraFlags = 0;
+            if(res->initialData) {
+                if(res->useProvidedBuffer) extraFlags |= CL_MEM_USE_HOST_PTR;
+                else extraFlags |= CL_MEM_COPY_HOST_PTR;
+            }
+            build = clCreateBuffer(context, res->memFlags | extraFlags, res->bytes, const_cast<aubyte*>(res->initialData), &err);
+            if(err == CL_INVALID_VALUE) errors.push_back("Invalid flags specified for \"" + res->name + '"');
+            else if(err == CL_INVALID_BUFFER_SIZE) errors.push_back("Invalid buffer size for \"" + res->name + "\": " + std::to_string(res->bytes));
+            else if(err == CL_INVALID_HOST_PTR) errors.push_back("Invalid host data for \"" + res->name + '"');
+            else if(err != CL_SUCCESS) errors.push_back("Some error while creating \"" + res->name + '"');
+            if(errors.size() != count) continue;
         }
-        ScopedFuncCall relMem([build]() { clReleaseMemObject(build); });
         resHandles.insert(std::make_pair(res->name, build));
         relMem.Dont();
         popLast.Dont();
     }
+    return errors;
 }
 
 
-void AbstractAlgorithm::PrepareKernels(KernelRequest *kernels, asizei numKernels, cl_device_id dev) {
+std::vector<std::string> AbstractAlgorithm::PrepareKernels(KernelRequest *kernels, asizei numKernels, AbstractSpecialValuesProvider &special) {
     // First of all, let's build a set of unique file names. Some algorithms load up the same file more than once.
     // Those are usually very few entries so it's probably faster using an array but set is easier.
     std::map<std::string, std::string> load;
     std::vector<char> source;
+    std::vector<std::string> errors;
     for(auto k = kernels; k < kernels + numKernels; k++) {
         if(load.find(k->fileName) != load.end()) continue;
         auto newKern = load.insert(std::make_pair(k->fileName, std::string())).first;
 
         std::ifstream disk(newKern->first, std::ios::binary);
-        if(disk.is_open() == false) throw std::string("Could not open \"") + newKern->first + '"';
+        if(disk.is_open() == false) {
+            errors.push_back(std::string("Could not open \"") + newKern->first + '"');
+            continue;
+        }
         disk.seekg(0, std::ios::end);
         auto size = disk.tellg();
-        if(size >= 1024 * 1024 * 8) throw std::string("Kernel source in \"") + newKern->first + "\" is too big, measures " + std::to_string(size) + " bytes!";
+        if(size >= 1024 * 1024 * 8) {
+            errors.push_back(std::string("Kernel source in \"") + newKern->first + "\" is too big, measures " + std::to_string(size) + " bytes!");
+            continue;
+        }
         source.resize(asizei(size) + 1);
         disk.seekg(0, std::ios::beg);
         disk.read(source.data(), size);
         source[asizei(size)] = 0; // not required by specification, but some older drivers are stupid
         newKern->second = source.data();
     }
+    if(errors.size()) return errors;
+    aiSignature = ComputeVersionedHash(kernels, numKernels, load);
     // Run all the compile calls. One program must be built for each requested kernel as it will go with different compile options but they have the same source.
     // OpenCL is reference counted (bleargh) so programs can go at the end of this function.
     // I wanted to do this asyncronously but BuildProgram goes with notification functions instead of events (?) so I would have to do that multithreaded.
@@ -73,11 +95,15 @@ void AbstractAlgorithm::PrepareKernels(KernelRequest *kernels, asizei numKernels
         const asizei len = strlen(str);
         cl_int err = 0;
         cl_program created = clCreateProgramWithSource(context, 1, &str, &len, &err);
-        if(err != CL_SUCCESS) throw std::string("Failed to create program \"") + kernels[loop].fileName + '"';
+        if(err != CL_SUCCESS) {
+            errors.push_back(std::string("Failed to create program \"") + kernels[loop].fileName + '"');
+            continue;
+        }
         progs[loop] = created;
 
         err = clBuildProgram(created, NULL, 0, kernels[loop].compileFlags.c_str(), NULL, NULL);
-        std::string errString;        if(err == CL_INVALID_BUILD_OPTIONS) {
+        std::string errString;
+        if(err == CL_INVALID_BUILD_OPTIONS) {
             errString = std::string("Invalid compile options \"");
             errString += kernels[loop].compileFlags + "\" for ";
             errString += kernels[loop].fileName + '.' + kernels[loop].entryPoint;
@@ -90,30 +116,38 @@ void AbstractAlgorithm::PrepareKernels(KernelRequest *kernels, asizei numKernels
         if(errString.length()) {
             std::vector<char> log;
             asizei requiredChars;
-            err = clGetProgramBuildInfo(created, dev, CL_PROGRAM_BUILD_LOG, 0, NULL, &requiredChars);
-            if(err != CL_SUCCESS) throw errString + " (also failed to call clGetProgramBuildInfo successfully)"; // unrecognized compile options meh
+            err = clGetProgramBuildInfo(created, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &requiredChars);
+            if(err != CL_SUCCESS) {
+                errors.push_back(errString + " (also failed to call clGetProgramBuildInfo successfully)"); // unrecognized compile options meh
+                continue;
+            }
             else {
                 log.resize(requiredChars);
-                err = clGetProgramBuildInfo(created, dev, CL_PROGRAM_BUILD_LOG, log.size(), log.data(), &requiredChars);
-                if(err != CL_SUCCESS) throw errString + "(also failed to get build error log)";
-                throw errString + '\n' + "ERROR LOG:\n" + std::string(log.data(), requiredChars);
+                err = clGetProgramBuildInfo(created, device, CL_PROGRAM_BUILD_LOG, log.size(), log.data(), &requiredChars);
+                if(err != CL_SUCCESS) errString + "(also failed to get build error log)";
+                errors.push_back(errString + '\n' + "ERROR LOG:\n" + std::string(log.data(), requiredChars));
             }
         }
     }
+    if(errors.size()) return errors;
     this->kernels.reserve(numKernels);
 
     for(asizei loop = 0; loop < numKernels; loop++) {
         cl_int err;
         cl_kernel kern = clCreateKernel(progs[loop], kernels[loop].entryPoint.c_str(), &err);
-        if(err != CL_SUCCESS) throw std::string("Could not create kernel \"") + kernels[loop].fileName + ':' + kernels[loop].entryPoint + "\", error " + std::to_string(err);
+        if(err != CL_SUCCESS) {
+            errors.push_back(std::string("Could not create kernel \"") + kernels[loop].fileName + ':' + kernels[loop].entryPoint + "\", error " + std::to_string(err));
+            continue;
+        }
         this->kernels.push_back(KernelDriver(kernels[loop].groupSize, kern));
     }
-    for(asizei loop = 0; loop < numKernels; loop++) BindParameters(this->kernels[loop], kernels[loop]);
-    aiSignature = ComputeVersionedHash(kernels, numKernels, load);
+    if(errors.size()) return errors;
+    for(asizei loop = 0; loop < numKernels; loop++) BindParameters(this->kernels[loop], kernels[loop], special);
+    return errors;
 }
 
 
-void AbstractAlgorithm::BindParameters(KernelDriver &kdesc, const KernelRequest &bindings) {
+void AbstractAlgorithm::BindParameters(KernelDriver &kdesc, const KernelRequest &bindings, AbstractSpecialValuesProvider &disp) {
     // First split out the bindings.
     std::vector<std::string> params;
     asizei comma = 0, prev = 0;
@@ -133,12 +167,27 @@ void AbstractAlgorithm::BindParameters(KernelDriver &kdesc, const KernelRequest 
         if(name.length() == 0) throw "Kernel binding has empty name.";
     }
     // Now look em up, some are special and perhaps they might need an unified way of mangling (?)
+    // The main problem here is that I need to produce persistent buffers for Push'ing so late bounds first!
+    asizei lateBound = 0;
     for(cl_uint loop = 0; loop < params.size(); loop++) {
         const auto &name(params[loop]);
         SpecialValueBinding desc;
-        if(SpecialValue(desc, name)) {
+        if(disp.SpecialValue(desc, name)) {
+            if(desc.earlyBound == false) lateBound++;
+        }
+    }
+    kdesc.dtBindings.resize(lateBound); // .reserve also good
+    lateBound = 0;
+    for(cl_uint loop = 0; loop < params.size(); loop++) {
+        const auto &name(params[loop]);
+        SpecialValueBinding desc;
+        if(disp.SpecialValue(desc, name)) {
             if(desc.earlyBound) clSetKernelArg(kdesc.clk, loop, sizeof(desc.resource.buff), &desc.resource.buff);
-            else kdesc.dtBindings.push_back(std::make_pair(loop, desc.resource.index));
+            else {
+                kdesc.dtBindings[lateBound].first = loop;
+                disp.Push(kdesc.dtBindings[lateBound].second, desc.resource.index);
+                lateBound++;
+            }
             continue;
         }
         auto bound = resHandles.find(name);
@@ -156,13 +205,12 @@ void AbstractAlgorithm::BindParameters(KernelDriver &kdesc, const KernelRequest 
 }
 
 
-void AbstractAlgorithm::RunAlgorithm(cl_command_queue q, asizei amount) const {
+void AbstractAlgorithm::RunAlgorithm(cl_command_queue q, asizei amount) {
     for(asizei loop = 0; loop < kernels.size(); loop++) {
         const auto &kern(kernels[loop]);
-        for(auto param : kern.dtBindings) {
-            cl_mem buff(lbBuffers[param.second]);
-            clSetKernelArg(kern.clk, param.first, sizeof(buff), &buff);
-        }
+        for(auto param : kern.dtBindings) clSetKernelArg(kern.clk, param.first, sizeof(param.second.buff), &param.second.buff);
+        // ^ \todo always rebind for the time being, interesting experiment is see how it performs
+
         asizei woff[3], wsize[3];
         memset(woff, 0, sizeof(woff));
         memset(wsize, 0, sizeof(wsize));
@@ -170,7 +218,7 @@ void AbstractAlgorithm::RunAlgorithm(cl_command_queue q, asizei amount) const {
         - (N-1)th dimension is the hash being computed in global work -> number of hashes computed per workgroup in local work declaration
         - All previous dimensions are the "team" and can be easily pulled from declaration.
         Work offset leaves "team players" untouched while global work size is always <team size><total hashes>. */
-        woff[kern.dimensionality - 1] = hashing.nonceBase;
+        woff[kern.dimensionality - 1] = nonceBase;
         for(auto cp = 0u; cp < kern.dimensionality - 1; cp++) wsize[cp] = kern.wgs[cp];
         wsize[kern.dimensionality - 1] = amount;
 
@@ -182,6 +230,7 @@ void AbstractAlgorithm::RunAlgorithm(cl_command_queue q, asizei amount) const {
             throw ret;
         }
     }
+    nonceBase += amount;
 }
 
 

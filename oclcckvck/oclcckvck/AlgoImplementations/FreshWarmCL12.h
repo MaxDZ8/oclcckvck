@@ -4,15 +4,17 @@
  * For conditions of distribution and use, see the LICENSE or hit the web.
  */
 #pragma once
-#include "../StopWaitAlgorithm.h"
+#include "../AbstractAlgorithm.h"
 
 namespace algoImplementations {
 
-class FreshWarmCL12 : public StopWaitAlgorithm {
+class FreshWarmCL12 : public AbstractAlgorithm {
 public:
     FreshWarmCL12(cl_context ctx, cl_device_id dev, asizei concurrency)
-        : StopWaitAlgorithm(ctx, dev, concurrency, "Fresh", "warm", "v1", true) {
-        const asizei passingBytes = concurrency * 16 * sizeof(cl_uint);
+        : AbstractAlgorithm(concurrency, ctx, dev, "Fresh", "warm", "v1", 16) { }
+
+    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
+        const asizei passingBytes = hashCount * 16 * sizeof(cl_uint);
         KnownConstantProvider K; // all the constants are fairly nimble so I don't save nor optimize this in any way!
         auto AES_T_TABLES(K[CryptoConstant::AES_T]);
         auto SIMD_ALPHA(K[CryptoConstant::SIMD_alpha]);
@@ -31,7 +33,8 @@ public:
 
         resources[4].presentationName = "SIMD &alpha; table";
         resources[5].presentationName = "SIMD &beta; table";
-        PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), concurrency);
+        auto error(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        if(error.size()) return error;
 
         typedef WorkGroupDimensionality WGD;
         KernelRequest kernels[] = {
@@ -61,8 +64,9 @@ public:
                 "io1, $candidates, $dispatchData, AES_T_TABLES"
             }
         };
-        PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), dev);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
     }
+    bool BigEndian() const { return true; }
 };
 
 }

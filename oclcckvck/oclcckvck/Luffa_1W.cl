@@ -10,7 +10,7 @@ Luffa-512 does not use so many registers. In initial tests, this used 97 VGPRs.
 Occupancy is only 20% but this still gives no more than 6% memory stalls.
 Parallelizing it would be to make it more efficient memory wise. Unfortunately,
 I haven't quite understood parallel luffa.
- 
+
 This code produces a slightly smaller executable (~2%). This is slightly above 17k
 instruction bytes thereby slightly exceeding the cache. It ends up being around 2%
 faster as well. Odds are parallelizing (perhaps 2-way) would give me a good

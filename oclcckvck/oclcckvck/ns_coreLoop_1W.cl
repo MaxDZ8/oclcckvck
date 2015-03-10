@@ -242,7 +242,7 @@ kernel void sequentialWrite_1way(global uint *xin, global uint *padBuffer,
             global uint *currentSlice = statex + slicePerm[loop % 2][slice] * 16 * get_local_size(0);
             const uint16 leftSlice = LoadStateSlice(currentSlice);
             PreparePadBlock(mySlice, leftSlice);
-            
+
             event_t padOut = async_work_group_copy(padBuffer, lds, 16 * 64, 0);
             //StorePadSlice(padBuffer, leftSlice);
             padBuffer += 16 * get_global_size(0);
@@ -283,7 +283,7 @@ kernel void indirectedRead_1way(global uint *xio, global const uint *padBuffer,
             mangle ^= LoadStateSlice(currSlice);
             mangle ^= LoadPadSlice(padSlices + slice * 16 * get_global_size(0));
             const uint16 prev = mangle;
-            SliceMixVEC(&mangle, 10);                
+            SliceMixVEC(&mangle, 10);
             mangle += prev;
             StoreStateSlice(currSlice, mangle);
         }

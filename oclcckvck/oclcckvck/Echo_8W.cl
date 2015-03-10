@@ -16,7 +16,7 @@ void AESRoundLDS(local uint *o0, local uint *o1, local uint *o2, local uint *o3,
     *o1 = lut0[i1 & 0xFF] ^ LUT(1, i2) ^ LUT(2, i3) ^ LUT(3, i0) ^ k1;
     *o2 = lut0[i2 & 0xFF] ^ LUT(1, i3) ^ LUT(2, i0) ^ LUT(3, i1) ^ k2;
     *o3 = lut0[i3 & 0xFF] ^ LUT(1, i0) ^ LUT(2, i1) ^ LUT(3, i2) ^ k3;
-    
+
 #undef LUT
 #else
 #error Endianness?
@@ -31,7 +31,7 @@ void AESRoundNoKeyLDS(local uint *o0, local uint *o1, local uint *o2, local uint
 
 /* stop of repeated code, below is echo specific */
 
-        
+
 void Increment(uint4 *modify, uint add) {
     uint4 inc = *modify;
     inc.x += add;
@@ -75,7 +75,7 @@ uint Wrap(uint offset) {
 
 #if defined ECHO_IS_LAST
 __attribute__((reqd_work_group_size(8, 8, 1)))
-kernel void Echo_8way(global uint2 *input, global uint *found, global uint *dispatchData, global uint *aes_round_luts) {
+kernel void Echo_8way(global uint2 *input, volatile global uint *found, global uint *dispatchData, global uint *aes_round_luts) {
 #else
 __attribute__((reqd_work_group_size(8, 8, 1)))
 kernel void Echo_8way(global uint2 *input, global uint2 *hashOut, global uint *aes_round_luts, global uint *debug) {
@@ -101,7 +101,7 @@ kernel void Echo_8way(global uint2 *input, global uint2 *hashOut, global uint *a
 #else
     local uint *aesLUT3 = 0;
 #endif
-    
+
     /* Legacy 1-way kernels here have a boatload of registers here. Think at them as
         ulong W[16][2], Vb[8][2];
     If you look carefully, you'll see Vb is constants.
@@ -111,7 +111,7 @@ kernel void Echo_8way(global uint2 *input, global uint2 *hashOut, global uint *a
       2       80  90  A0  B0
       3       C0  D0  E0  F0
     This allows to keep the MIX_COLUMN operation inside a single WI, which is good for perf
-    because it would require re-sync before next iteration.    
+    because it would require re-sync before next iteration.
     Those registers are workN, the other index is 0 if localindex(0)<4, otherwise 1. */
     uint2 work0, work1, work2, work3;
     uint4 notSoK = (uint4)(512, 0, 0, 0);
@@ -141,18 +141,18 @@ kernel void Echo_8way(global uint2 *input, global uint2 *hashOut, global uint *a
         work3 = hilo(input[6 + (get_local_id(0) < 4? 0 : 1)]);
         break;
     }
-    
+
     wait_group_events(1, &ldsReady); // this is really necessary only a few lines below but here is nicer for structure
     local uint passhi[4 * 8 * 8];
     local uint passlo[4 * 8 * 8];
-    
+
     uint evnSlot = get_local_id(0) + get_local_id(1) * 8;
     uint oddSlot = get_local_id(0) + get_local_id(1) * 8 + (get_local_id(0) < 4? 4 : -4);
     passhi[64 * 0 + evnSlot] = work0.hi;    passlo[64 * 0 + evnSlot] = work0.lo;
     passhi[64 * 1 + oddSlot] = work1.hi;    passlo[64 * 1 + oddSlot] = work1.lo;
     passhi[64 * 2 + evnSlot] = work2.hi;    passlo[64 * 2 + evnSlot] = work2.lo;
     passhi[64 * 3 + oddSlot] = work3.hi;    passlo[64 * 3 + oddSlot] = work3.lo;
-    
+
     for (unsigned u = 0; u < 10; u ++) {
         { /* Legacy kernel performs 16 passes of two AES rounds on the various registers. WorkNo, WorkNi.
             I do that explicitly as I already "unrolled" those 16 passes across 8 WI. Note I need to increment
@@ -178,8 +178,8 @@ kernel void Echo_8way(global uint2 *input, global uint2 *hashOut, global uint *a
                 barrier(CLK_LOCAL_MEM_FENCE);
                 AESRoundLDS(x0, x1, x2, x3, notSoK.x, notSoK.y, notSoK.z, notSoK.w, aesLUT0, aesLUT1, aesLUT2, aesLUT3);
                 barrier(CLK_LOCAL_MEM_FENCE);
-                AESRoundNoKeyLDS(x0, x1, x2, x3, aesLUT0, aesLUT1, aesLUT2, aesLUT3);    
-                Increment(&notSoK, 16 - 2);    
+                AESRoundNoKeyLDS(x0, x1, x2, x3, aesLUT0, aesLUT1, aesLUT2, aesLUT3);
+                Increment(&notSoK, 16 - 2);
             }
         }
         /* I somehow managed to write shift-rows merged with mix-column... but it was fairly complicated
@@ -222,17 +222,32 @@ kernel void Echo_8way(global uint2 *input, global uint2 *hashOut, global uint *a
     const uint2 nival = (uint2)(passhi[ni], passlo[ni]);
     const uint2 xorv = get_local_id(0) % 2 == 0? (uint2)(512, 0) : (uint2)(0);
     const uint2 myHash = xorv ^ input[get_local_id(0)] ^ noval ^ nival;
-    
+
 #if defined ECHO_IS_LAST
+    barrier(CLK_LOCAL_MEM_FENCE);
     if(get_local_id(0) == 3) {
-        ulong magic = (((ulong)myHash.y) << 32) | myHash.x;
-        ulong target = (((ulong)dispatchData[1]) << 32) | dispatchData[2]; // watch out for endianess!
+        ulong magic = upsample(myHash.y, myHash.x);
+        ulong target =  upsample(dispatchData[1], dispatchData[2]); // watch out for endianess!
+		passhi[get_local_id(1)] = magic <= target;
         if(magic <= target) {
             uint storage = atomic_inc(found);
-            found[storage + 1] = as_uint(as_char4(get_global_id(1)).wzyx); // watch out for endianess!
+			passhi[get_local_size(1) + get_local_id(1)] = storage;
+			// Now passing out the whole hash as well as nonce for extra checking
+            found[storage * 17 + 1] = as_uint(as_char4(get_global_id(1)).wzyx); // watch out for endianess!
         }
     }
-#else 
+	barrier(CLK_LOCAL_MEM_FENCE);
+	uint candidate = 0;
+	for(uint slot = 0; slot < get_local_size(1); slot++) candidate = slot == get_local_id(1)? passhi[slot] : candidate;
+	if(candidate) {
+	    found++;
+        candidate = passhi[get_local_size(1) + get_local_id(1)]; // very **likely** broadcast
+		found += candidate * 17;
+        found++; // this one is the nonce, already stored
+        found[get_local_id(0) * 2 + 0] = myHash.x;
+        found[get_local_id(0) * 2 + 1] = myHash.y;
+	}
+#else
 #error to be tested!
     hashOut += (get_global_id(1) - get_global_offset(1)) * 8;
     hashOut[get_local_id(0)] = myHash; // maybe swap uints

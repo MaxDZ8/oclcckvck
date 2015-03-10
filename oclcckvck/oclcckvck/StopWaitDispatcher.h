@@ -1,12 +1,13 @@
 /*
- * Copyright (C) 2014 Massimo Del Zotto
+ * Copyright (C) 2015 Massimo Del Zotto
  * This code is released under the MIT license.
  * For conditions of distribution and use, see the LICENSE or hit the web.
  */
 #pragma once
 #include "AbstractAlgorithm.h"
+#include "AbstractSpecialValuesProvider.h"
 
-/*! A stop-n-wait algorithm is an algorithm which always gives the GPU 1 unit of work at time.
+/*! The stop-n-wait dispatcher takes an algorithm and uses it to drive the GPU 1 unit of work at time.
 It dispatches data and waits for result. It is basically the same thing M8M always did, which is very similar to legacy miners.
 WRT legacy miners two differences come to mind.
 
@@ -15,23 +16,36 @@ of out-of-order queues which is not really needed, especially as many algos are 
 M8M dispatches all the work, including the map request and then **waits for it until finished**.
 An initial version of Qubit also tried to dispatch one step at time but it was nonsensically overcomplicated for no benefit.
 So in short I avoid a Finish (1) and a blocking read (2). Apparently this produces better interactivity. */
-class StopWaitAlgorithm : public AbstractAlgorithm {
+class StopWaitDispatcher : private AbstractSpecialValuesProvider {
 public:
-    const bool bigEndian;
-    const asizei hashCount;
-    StopWaitAlgorithm(cl_context ctx, cl_device_id dev, asizei concurrency, const char *algo, const char *imp, const char *ver, bool be)
-        : AbstractAlgorithm(ctx, dev, algo, imp, ver), hashCount(concurrency), bigEndian(be) {
-        PrepareIOBuffers(ctx, concurrency);
-        
+    AbstractAlgorithm &algo;
+
+    StopWaitDispatcher(AbstractAlgorithm &drive) : algo(drive) {
+        PrepareIOBuffers(algo.context, algo.hashCount);
+
+        // Bind value names...
+        SpecialValueBinding early;
+        early.earlyBound = true;
+        early.resource.buff = wuData;
+        specials.push_back(NamedValue("$wuData", early));
+        early.resource.buff = dispatchData;
+        specials.push_back(NamedValue("$dispatchData", early));
+        early.resource.buff = candidates;
+        specials.push_back(NamedValue("$candidates", early));
+
         cl_int err = 0;
-        queue = clCreateCommandQueue(ctx, dev, 0, &err);
+        queue = clCreateCommandQueue(algo.context, algo.device, 0, &err);
         if(!queue || err != CL_SUCCESS) throw "Could not create command queue for device!";
     }
-    ~StopWaitAlgorithm() {
+    ~StopWaitDispatcher() {
         if(mapping) clReleaseEvent(mapping);
         if(nonces) clEnqueueUnmapMemObject(queue, candidates, nonces, 0, NULL, NULL);
         if(queue) clReleaseCommandQueue(queue);
     }
+
+
+    void BlockHeader(const std::array<aubyte, 80> &header) { blockHeader = header; }
+    void TargetBits(aulong reference) { targetBits = reference; }
 
     AlgoEvent Tick(const std::vector<cl_event> &blockers) {
         // The first, most important thing to do is to free results so I can start again.
@@ -39,25 +53,25 @@ public:
             if(std::find(blockers.cbegin(), blockers.cend(), mapping) == blockers.cend()) return AlgoEvent::working;
             return AlgoEvent::results;
         }
-        if(hashing.nonceBase + hashCount > std::numeric_limits<auint>::max()) return AlgoEvent::exhausted; // nothing to do
+        if(algo.Overflowing()) return AlgoEvent::exhausted; // nothing to do
 
         cl_int err = 0;
-        if(bigEndian) {
+        if(algo.BigEndian()) {
             aubyte be[80];
             for(asizei i = 0; i < sizeof(be); i += 4) {
-                for(asizei cp = 0; cp < 4; cp++) be[i + cp] = hashing.header[i + 3 - cp];
+                for(asizei cp = 0; cp < 4; cp++) be[i + cp] = blockHeader[i + 3 - cp];
             }
             err = clEnqueueWriteBuffer(queue, wuData, CL_TRUE, 0, sizeof(be), be, 0, NULL, NULL);
         }
         else {
-            err = clEnqueueWriteBuffer(queue, wuData, CL_TRUE, 0, sizeof(hashing.header), hashing.header.data(), 0, NULL, NULL);
+            err = clEnqueueWriteBuffer(queue, wuData, CL_TRUE, 0, sizeof(blockHeader), blockHeader.data(), 0, NULL, NULL);
         }
         if(err != CL_SUCCESS) throw std::string("CL error ") + std::to_string(err) + " while attempting to update $wuData";
 
         cl_uint buffer[5]; // taken as is from M8M FillDispatchData... how ugly!
         buffer[0] = 0;
-        buffer[1] = static_cast<cl_uint>(hashing.target >> 32);
-        buffer[2] = static_cast<cl_uint>(hashing.target);
+        buffer[1] = static_cast<cl_uint>(targetBits >> 32);
+        buffer[2] = static_cast<cl_uint>(targetBits);
         buffer[3] = 0;
         buffer[4] = 0;
         err = clEnqueueWriteBuffer(queue, dispatchData, CL_TRUE, 0, sizeof(buffer), buffer, 0, NULL, NULL);
@@ -66,9 +80,8 @@ public:
         cl_uint zero = 0;
         clEnqueueWriteBuffer(queue, candidates, true, 0, sizeof(cl_uint), &zero, 0, NULL, NULL);
 
-        RunAlgorithm(queue, hashCount);
-        hashing.nonceBase += hashCount;
-        dispatchedHeader = hashing.header;
+        algo.RunAlgorithm(queue, algo.hashCount);
+        dispatchedHeader = blockHeader;
 
         nonces = reinterpret_cast<cl_uint*>(clEnqueueMapBuffer(queue, candidates, CL_FALSE, CL_MAP_READ, 0, nonceBufferSize, 0, NULL, &mapping, &err));
         if(err != CL_SUCCESS) throw std::string("CL error ") + std::to_string(err) + " attempting to map nonce buffers.";
@@ -83,41 +96,46 @@ public:
 
 
     MinedNonces GetResults() {
-        MinedNonces ret(dispatchedHeader);
         const asizei count = *nonces;
-        nonces++;
+        MinedNonces ret(dispatchedHeader);
+        ret.hashes.reserve(count * algo.uintsPerHash);
+        ret.nonces.reserve(count);
+        auto incremental(nonces);
+        incremental++;
         for(asizei cp = 0; cp < count; cp++) {
-            ret.nonces.push_back(nonces[cp]);
-            //! \todo migrate to hash-out kernels
+            ret.nonces.push_back(*incremental);
+            incremental++;
+            for(asizei h = 0; h < algo.uintsPerHash; h++) ret.hashes.push_back(incremental[h]);
+            incremental += algo.uintsPerHash;
         }
+        clEnqueueUnmapMemObject(queue, candidates, nonces, 0, NULL, NULL);
         nonces = nullptr;
         clReleaseEvent(mapping);
         mapping = 0;
         return ret;
     }
 
-    asizei GetConcurrency() const { return hashCount; }
 
-private:
-    bool SpecialValue(SpecialValueBinding &desc, const std::string &name) {
-        // This is very easy for stop-n-wait as everything can be bound statically.
-        cl_mem core = 0;
-        if(name == "$wuData") core = wuData;
-        else if(name == "$dispatchData") core = dispatchData;
-        else if(name == "$candidates") core = candidates;
-        else return false;
-        desc.earlyBound = true;
-        desc.resource.buff = core;
-        return true;
+    void Push(LateBinding &slot, asizei valueIndex) {
+        // Do nothing. Stop-n-wait has only early bound buffers.
     }
 
+    //! So I have more private stuff.
+    AbstractSpecialValuesProvider& AsValueProvider() { return *this; }
+
+    //! This is needed mainly for testing. No real need to have it there but more private stuff.
+    cl_command_queue GetQueue() const { return queue; }
+
+private:
     cl_mem wuData = 0, dispatchData = 0;
     cl_mem candidates = 0;
     asizei nonceBufferSize = 0;
     cl_event mapping = 0;
     cl_command_queue queue = 0;
     auint *nonces = nullptr;
-    std::array<aubyte, 80> dispatchedHeader;
+    std::array<aubyte, 80> dispatchedHeader; //!< block dispatched to last RunAlgorithm
+    std::array<aubyte, 80> blockHeader; //!< block to dispatch at NEXT RunAlgorithm!
+    aulong targetBits;
 
     void PrepareIOBuffers(cl_context context, asizei hashCount){
         cl_int error;
@@ -128,10 +146,11 @@ private:
         dispatchData = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY, byteCount, NULL, &error);
         if(error != CL_SUCCESS) throw std::string("OpenCL error ") + std::to_string(error) + " while trying to create dispatchData buffer.";
         // The candidate buffer should really be dependant on difficulty setting but I take it easy.
-        byteCount = 1 + hashCount / (32 * 1024);
+        byteCount = hashCount / (16 * 1024);
         //! \todo pull the whole hash down so I can check mismatches
-        if(byteCount < 33) byteCount = 33;
-        byteCount *= sizeof(cl_uint);
+        if(byteCount < 32) byteCount = 32;
+        byteCount *= sizeof(cl_uint) * (1 + algo.uintsPerHash);
+        byteCount += 4; // initial candidate count
         nonceBufferSize = byteCount;
         candidates = clCreateBuffer(context, CL_MEM_ALLOC_HOST_PTR, byteCount, NULL, &error);
         if(error) throw std::string("OpenCL error ") + std::to_string(error) + " while trying to resulting nonces buffer.";

@@ -31,6 +31,7 @@ will recostruct the nonce2 used. */
 struct MinedNonces {
     std::array<aubyte, 80> from;
     std::vector<auint> nonces;
+    std::vector<auint> hashes; //!< hashes[i] is the hash produced by nonces[i], so I can test computation is correct.
     explicit MinedNonces() = default;
     MinedNonces(const std::array<aubyte, 80> &hashOriginator) : from(hashOriginator) { }
 };

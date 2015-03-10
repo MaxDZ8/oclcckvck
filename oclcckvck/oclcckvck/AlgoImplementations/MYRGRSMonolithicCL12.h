@@ -4,14 +4,16 @@
  * For conditions of distribution and use, see the LICENSE or hit the web.
  */
 #pragma once
-#include "../StopWaitAlgorithm.h"
+#include "../AbstractAlgorithm.h"
 
 namespace algoImplementations {
 
-class MYRGRSMonolithicCL12 : public StopWaitAlgorithm {
+class MYRGRSMonolithicCL12 : public AbstractAlgorithm {
 public:
     MYRGRSMonolithicCL12(cl_context ctx, cl_device_id dev, asizei concurrency)
-        : StopWaitAlgorithm(ctx, dev, concurrency, "GRSMYR", "monolithic", "v1", true) {
+        : AbstractAlgorithm(concurrency, ctx, dev, "GRSMYR", "monolithic", "v1", 8) { }
+
+    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
         auint roundCount[5] = {
             14, 14, 14, // groestl rounds
             2, 3 // SHA rounds
@@ -20,7 +22,8 @@ public:
             ResourceRequest("roundCount", CL_MEM_HOST_NO_ACCESS | CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(roundCount), roundCount)
         };
         resources[0].presentationName = "Round iterations";
-        PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), concurrency);
+        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        if(errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
         KernelRequest kernels[] = {
@@ -30,8 +33,9 @@ public:
                 "$candidates, $wuData, $dispatchData, roundCount"
             }
         };
-        PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), dev);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
     }
+    bool BigEndian() const { return true; }
 };
 
 }

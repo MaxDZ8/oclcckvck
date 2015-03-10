@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Massimo Del Zotto
+ * Copyright (C) 2015 Massimo Del Zotto
  * This code is released under the MIT license.
  * For conditions of distribution and use, see the LICENSE or hit the web.
  */
@@ -47,7 +47,7 @@ public:
             I cut it easy and make everything a short. */
             if(simd_alpha.size() == 0) {
                 simd_alpha.resize(256);
-                const int base = 41; 
+                const int base = 41;
                 int power = 1; // base^n
                 for(int loop = 0; loop < 256; loop++) {
                     simd_alpha[loop] = ashort(power);
@@ -69,7 +69,7 @@ public:
                 }
                 // Now reference implementation mangles it again adding the powers of 40^n,
                 // but only in the "final" message expansion. So we need to do nothing more.
-                // For some reason the beta value table is called "yoff_b_n" in legacy kernels by lib-SPH... 
+                // For some reason the beta value table is called "yoff_b_n" in legacy kernels by lib-SPH...
             }
             data = reinterpret_cast<const aubyte*>(simd_beta.data());
             footprint = sizeof(aushort) * simd_beta.size();

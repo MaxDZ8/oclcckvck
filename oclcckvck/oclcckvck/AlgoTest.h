@@ -4,7 +4,7 @@
  * For conditions of distribution and use, see the LICENSE or hit the web.
  */
 #pragma once
-#include "StopWaitAlgorithm.h"
+#include "StopWaitDispatcher.h"
 #include <functional>
 
 
@@ -33,7 +33,7 @@ public:
     }
 
     //! Run validity tests on selected device. Returns a list of errors.
-    std::vector<std::string> RunTests(StopWaitAlgorithm &algo) const {
+    std::vector<std::string> RunTests(StopWaitDispatcher &dispatch) const {
         using namespace std;
         vector<string> errorMessages;
         auto headers(GetHeaders());
@@ -43,14 +43,15 @@ public:
             const TestRun &block(headers.first[bindex]);
             std::array<aubyte, 80> header;
             for(asizei cp = 0; cp < sizeof(header); cp++) header[cp] = block.clData[cp];
-            algo.Header(header);
-            algo.TargetBits(block.targetBits);
+            dispatch.BlockHeader(header);
+            dispatch.TargetBits(block.targetBits);
+            dispatch.algo.Restart();
 
             aulong remHashes = block.iterations * nominalHashCount;
             vector<auint> candidates;
             while(remHashes) {
-                const cl_uint thisScan = cl_uint(min(remHashes, aulong(algo.hashCount)));
-                Mangle(candidates, algo, thisScan);
+                const cl_uint thisScan = cl_uint(min(remHashes, aulong(dispatch.algo.hashCount)));
+                Mangle(candidates, dispatch, thisScan);
                 remHashes -= thisScan;
             }
             if(candidates.size() != block.numResults) {
@@ -103,8 +104,8 @@ protected:
 
     //! Testing StopWaitAlgorithm is very easy: we just have to keep going until results are poured out, then exit.
     //! Note this is already called as long as we need iterating so that's really as simple.
-    static void Mangle(std::vector<auint> &candidates, StopWaitAlgorithm &algo, asizei hashCount) {
-        if(hashCount != algo.hashCount) {
+    static void Mangle(std::vector<auint> &candidates, StopWaitDispatcher &dispatch, asizei hashCount) {
+        if(hashCount != dispatch.algo.hashCount) {
             //! \todo
             //! if(algo.dynamicIntensity) everything is fine, algo can adapt
             throw std::string("Probably forgot to call CanRunTests first!");
@@ -113,13 +114,13 @@ protected:
         bool completed = false;
         cl_int ret = 0;
         while(!completed) {
-            auto ev(algo.Tick(blockers));
+            auto ev(dispatch.Tick(blockers));
             blockers.clear();
             switch(ev) {
             case AlgoEvent::dispatched: break; // how can I use this?
             case AlgoEvent::exhausted: throw "Impossible! Test data inconsistent!"; // Test data enumerates all the headers so this cannot happen
             case AlgoEvent::working:
-                algo.GetEvents(blockers); // in this case I can just wait here. This is not always possible.
+                dispatch.GetEvents(blockers); // in this case I can just wait here. This is not always possible.
                 ret = clWaitForEvents(cl_uint(blockers.size()), blockers.data());
                 /*! \todo clWaitForEvents returns when ALL the events have completed!
                 This is ridiculous, instead I should pick all the events, associate a callback to them - which means I have to remember which events
@@ -131,7 +132,7 @@ protected:
                 break;
             }
         }
-        auto produced(algo.GetResults()); // we know header already!
+        auto produced(dispatch.GetResults()); // we know header already!
         for(auto el : produced.nonces) candidates.push_back(el);
     }
 };

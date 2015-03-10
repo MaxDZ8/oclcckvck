@@ -45,7 +45,7 @@ int8 SIMD16W_MangleInput(global uchar *input, uint offset) {
     for(uint loop = 0; loop < 4; loop++) {
         x[loop] = offset < 64? input[offset] : 0; // select is inlined for scalars
         offset += 32;
-    }    
+    }
     int a[4];
     for(uint loop = 0; loop < 2; loop++) {
         a[loop * 2 + 0] = x[0] +  x[2];
@@ -62,11 +62,11 @@ int8 SIMD16W_MangleInput(global uchar *input, uint offset) {
     late values having the same value. I cannot risk bank collisions here, use L1 instead. */
 #else
 #if SIMD_REDUCE_BYTE_LUT > 1
-    b[1] = reduced[x[1] * 256 + x[3]];    
+    b[1] = reduced[x[1] * 256 + x[3]];
 #else
     b[1] = SIMD_ByteReduce((x[1] << 2) + (x[3] << 6));
 #endif
-    b[3] = reduced[x[3] * 256 + x[1]];    
+    b[3] = reduced[x[3] * 256 + x[1]];
 #endif
     return (int8)(a[0] + b[0], a[1] + b[1], a[2] + b[2], a[3] + b[3],
                   a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3]);
@@ -123,8 +123,8 @@ FFT_LOOP_16_8. In that case, WI0 will have to access the values "owned" by WI1 a
 With exponent 1, WI0 will access and mangle WI2, WI1 will require WI3. So basically we divide the
 state in intervals and somehow a "merge" merge them "reducing" two N*16-value intervals to
 a single 2*N*16-value interval. The process iterates on all 256 state values and continues until we
-get a 256-value interval. 
-/param exponentOffset valid values are 0..3 included. 
+get a 256-value interval.
+/param exponentOffset valid values are 0..3 included.
  - 0 produces LOOP_16_8 (16*8=128, two values set per loop)
  - 1 produces LOOP_32_4
  - 2 produces LOOP_64_2
@@ -142,8 +142,8 @@ void SIMD16W_MergeIntervals(uint exponent, local int *state, constant short *alp
         They're always either added or subtracted so they are guaranteed to be fitting a short.
       - It is a bit more surprising this property holds even in other passes such as LOOP_32_4. This happens
         because ShortReduce, no matter what, throws away the upper 16 bits, perhaps producing negative numbers, which
-        are not very much more complicated. 
-      - I cannot do that as I want everything to be coherent. 
+        are not very much more complicated.
+      - I cannot do that as I want everything to be coherent.
     What I do is fairly different. Starting point: we have N=16 WIs. Each WI gets to work on 2 values (n,m).
     So here's what we do. We subdivide the local-x WIs in groups of two. Both will work on column x, x+step
     but while the first thread pulls the first value from column x, the second pulls from x+step so the two
@@ -167,7 +167,7 @@ void SIMD16W_MergeIntervals(uint exponent, local int *state, constant short *alp
         const int m = odd? maybeN : maybeM;
         const int t = SIMD_ShortReduce(n * alpha[ax]);
         *one = m + t * (odd? -1 : 1);
-        *two = m - t * (odd? -1 : 1);    
+        *two = m - t * (odd? -1 : 1);
         one += 64;
         two += 64;
         ax += intervals * 2;
@@ -190,7 +190,7 @@ static constant uint4 SIMD_ROROT[4] = { // "round rotations"
     (uint4)( 3, 23, 17, 27),
     (uint4)(28, 19, 22,  7),
     (uint4)(29,  9, 15,  5),
-    (uint4)( 4, 13, 10, 25)    
+    (uint4)( 4, 13, 10, 25)
 };
 
 
@@ -211,7 +211,7 @@ static constant uchar SIMD_ROUT_PERM_512[7][8] = {
     { 2, 3, 0, 1, 6, 7, 4, 5 }, // j = 2 XOR 2
     { 3, 2, 1, 0, 7, 6, 5, 4 }, // j = 3 XOR 3
     { 5, 4, 7, 6, 1, 0, 3, 2 }, // j = 4 XOR 5
-    { 7, 6, 5, 4, 3, 2, 1, 0 }, // j = 5 XOR 7 
+    { 7, 6, 5, 4, 3, 2, 1, 0 }, // j = 5 XOR 7
     { 4, 5, 6, 7, 0, 1, 2, 3 }  // j = 6 XOR 4
 };
 
@@ -247,7 +247,7 @@ evolve the ABCD state "incrementally", in the hope to minimize divergence.
 There are 32 values in the ABCD matrix so it can be spread among 16 threads. There is going to be
 both some wasting (oldschool-gpu-style) and divergence (new-gen-gpu-style).
 The bottom line is we keep old state in WI private registers, but we slap new values to LDS
-even before having them final. 
+even before having them final.
 Legacy kernels use a fairly convoluted set of macros to directly access registers there and
 thus have a total advantage. I am therefore wasting instruction, divergence and require more
 registers in the first place. Hopefully this won't eat all my 200% performance over legacy so far!
@@ -258,14 +258,14 @@ void SIMD16W_Step(local int *abcd, uint roundIndex, uint stepIndex, const int mi
     const uint channel = get_local_id(0) % 8;
     const uint colBC = get_local_id(0) < 8? 1 : 2;
     const int prevBCi = abcd[ABCDOFF(colBC, channel)];
-    
+
     // 2nd: new columns AB is difficult, but B in particular comes handy to have there so
     // we can fetch it nicely from the permutation.
     const uint srcAD = get_local_id(0) < 8? 0 : 3;
     const uint dstAD = get_local_id(0) < 8? 1 : 0;
     int prevADi = abcd[ABCDOFF(srcAD, channel)];
     const int amount = srcAD == 0? r : s;
-    
+
     if(dstAD == 0) { // I'm sorry for that. I cannot quite work it out.
         const int a = abcd[ABCDOFF(0, channel)];
         const int b = abcd[ABCDOFF(1, channel)];
@@ -276,7 +276,7 @@ void SIMD16W_Step(local int *abcd, uint roundIndex, uint stepIndex, const int mi
         }
         prevADi += mixin;
     }
-    
+
     // Now we can start writing to matrix.
     abcd[ABCDOFF(dstAD, channel)] = rotate(prevADi, amount);
     abcd[ABCDOFF(colBC + 1, channel)] = prevBCi;
@@ -358,7 +358,7 @@ void WTranspose(local int *work) {
 }
 
 
-constant short SIMD512_MESSAGE1024BIT_LAST_BLOCK_W[16][16] = {  
+constant short SIMD512_MESSAGE1024BIT_LAST_BLOCK_W[16][16] = {
     { 0x0004, 0x001c, 0xffb0, 0xff88, 0xffd1, 0xff82, 0x002d, 0xff85,    0xffa4, 0xff81, 0xffba, 0x0017, 0xffe9, 0xffe8, 0x0028, 0xff83 },
     { 0x0065, 0x007a, 0x0022, 0xffe8, 0xff89, 0x006e, 0xff87, 0xff90,    0x0020, 0x0018, 0x0033, 0x0049, 0xff8b, 0xffc0, 0xffeb, 0x002a },
     { 0xffc4, 0x0010, 0x0005, 0x0055, 0x006b, 0x0034, 0xffd4, 0xffa0,    0x002a, 0x007f, 0xffee, 0xff94, 0xffd1, 0x001a, 0x005b, 0x0075 },
@@ -383,12 +383,12 @@ kernel void SIMD_16way(global uint *inputUINT, global uint *hashOut, global ucha
     inputCHAR += (get_global_id(1) - get_global_offset(1)) * 16 * 4;
     inputUINT += (get_global_id(1) - get_global_offset(1)) * 16;
     hashOut += (get_global_id(1) - get_global_offset(1)) * 16;
-    
+
     // - - - - - - - - - - - MESSAGE EXPANSION - - - - - - - - - - -
     /* According to SIMD official documentation, this is the
         1st stage - "Number Theoric Transform"
     End of page 13. Be careful that our "alphas" are what they call "beta" as we are doing SIMD-512.
-    
+
     In line of concept, every instance of 16 treads mangles a different hash and has a different, independant work.
     Every hash is computed 16-way so every WI has 16 values which are stored in the same LDS column.
     This is roughtly equal to "FFT16" in legacy kernels. */
@@ -403,14 +403,14 @@ kernel void SIMD_16way(global uint *inputUINT, global uint *hashOut, global ucha
         }
         int8 one = SIMD16W_MangleInput(inputCHAR, start);
         int8 two = SIMD16W_MangleInput(inputCHAR, start + 16);
-        
+
         SIMD16W_PrimeLDS(work + LDSIDX(get_local_id(0), 0, get_local_id(1)), one, two);
     }
     for(uint loop = 0; loop < 4; loop++) {
         barrier(CLK_LOCAL_MEM_FENCE);
         SIMD16W_MergeIntervals(loop, work + LDSIDX(0, 0, get_local_id(1)), alpha);
     }
-    
+
     // - - - - - - - - - - - CONCATENATED CODE - - - - - - - - - - -
     /* What legacy kernels do right now is clearly a an implementation of what reference.c
     implementation does at LN 155, followed by building the "concatenated code" of phase 2.
@@ -421,7 +421,7 @@ kernel void SIMD_16way(global uint *inputUINT, global uint *hashOut, global ucha
     Always remember 1) there are 16 parallel "threads" here 2) I store consecutive work ints
     by column, therefore consecutive elements are really 16 elements apart.
     As a side note: SIMD vectorialized 16-way implementation might look like a perfect fit
-    there but I don't quite understand it and I'm not even all that sure I want to use a LUT 
+    there but I don't quite understand it and I'm not even all that sure I want to use a LUT
     for that. */
     {
         barrier(CLK_LOCAL_MEM_FENCE);
@@ -433,15 +433,15 @@ kernel void SIMD_16way(global uint *inputUINT, global uint *hashOut, global ucha
         }
         /* According to reference.c this lifts values to [-128, 128]
         I'm not pretty sure what "lift" means to them. SIMD documentation referres to
-        those values being polynomials, so those polynomials might be raised to some power? */        
+        those values being polynomials, so those polynomials might be raised to some power? */
         for(int row = 0; row < 16; row++) {
             const int v = col[row * 32];
             col[row * 32] = v - (v > 128? 257 : 0);
         }
     }
-    
-    
-    // - - - - - - - - - - - 3rd stage, PERMUTATION - - - - - - - - - - -    
+
+
+    // - - - - - - - - - - - 3rd stage, PERMUTATION - - - - - - - - - - -
     // Before the ladders, we build (A,B,C,D) = IV xor MSG
     // Our message is 64bytes <-> 256 bits, to be padded with 0s up to 512.
     // Because x xor 0 = x we have it slightly easier. Those values must also be in LDS.
@@ -451,21 +451,21 @@ kernel void SIMD_16way(global uint *inputUINT, global uint *hashOut, global ucha
     ABCD[ABCDOFF(vari + 0, channel)] = SIMD_IV_512[vari + 0][channel] ^ inputUINT[get_local_id(0)];
     ABCD[ABCDOFF(vari + 2, channel)] = SIMD_IV_512[vari + 2][channel];
     barrier(CLK_LOCAL_MEM_FENCE);
-    
+
     // Implementation detail: 8 WI needs to access work sequentially now. Avoid massive LDS bank
     // conflicts. So far I've been considerably more efficient than legacy implementations, but now
     // I start paying the price.
     WTranspose(work);
-    
+
     // note: inner code expansion here would almost be embarassingly parallel!
     // TODO: inner code expansion!
-    
+
     barrier(CLK_LOCAL_MEM_FENCE);
-    
+
     // At this point, the 256 values in the matrix are to be considered 32 rows of 8 values each,
     // to be somehow "transformed" by the ABCD matrix. Those rows should be permuted.
     // It is just easier to permute the lookup address instead.
-    
+
     /* Now we get to the real deal. 4 consecutive stages of 8 parallel Feistel block ciphers,
     building a Feistel network. It is easy to visualize them in their easiest form but you're
     better off to WikiPedia. Each block cipher basically mixes an an input with a constant and
@@ -475,7 +475,7 @@ kernel void SIMD_16way(global uint *inputUINT, global uint *hashOut, global ucha
     SIMD16W_Round(ABCD, work, SIMD_ROROT[1], 1);
     SIMD16W_Round(ABCD, work, SIMD_ROROT[2], 2);
     SIMD16W_Round(ABCD, work, SIMD_ROROT[3], 3);
-    
+
     // SIMD.pdf, page 19 (also see reference.c:350)
     // The whole compression function is made of 4 rounds, plus four final steps to mix
     // the initial chaining value to the initial state (this is our feed-forward).
@@ -489,7 +489,7 @@ kernel void SIMD_16way(global uint *inputUINT, global uint *hashOut, global ucha
         SIMD16W_Step(ABCD, 6, 0, mixin.s2, 10, 25, STEP_FUNC_IF);
         SIMD16W_Step(ABCD, 0, 0, mixin.s3, 25,  4, STEP_FUNC_IF);
     }
-    
+
     // - - - - - - - - - - - Final compression function - - - - - - - - - - -
     // We don't do that. Our message is known to be 32 uints, so 128 bytes or 1024 bits.
     // Therefore, the work state is always the same: SIMD512_MESSAGE1024BIT_LAST_BLOCK_W
@@ -500,7 +500,7 @@ kernel void SIMD_16way(global uint *inputUINT, global uint *hashOut, global ucha
         abcdCopy.s1 = ABCD[ABCDOFF(1, get_local_id(0) - 8)];
         abcdCopy.s2 = ABCD[ABCDOFF(2, get_local_id(0) - 8)];
         abcdCopy.s3 = ABCD[ABCDOFF(3, get_local_id(0) - 8)];
-    }    
+    }
     if(get_local_id(0) == 0) ABCD[ABCDOFF(0, 0)] ^= 0x0200;
     { // copy to local memory. Legacy kernels don't do that as they're MACRO based, but the compiler will likely arrange something anyway!
         local int *dst = work + LDSIDX(get_local_id(0), 0, get_local_id(1));
@@ -518,6 +518,6 @@ kernel void SIMD_16way(global uint *inputUINT, global uint *hashOut, global ucha
     SIMD16W_Step(ABCD, 5, 0, abcdCopy.s1, 13, 10, STEP_FUNC_IF);
     SIMD16W_Step(ABCD, 6, 0, abcdCopy.s2, 10, 25, STEP_FUNC_IF);
     SIMD16W_Step(ABCD, 0, 0, abcdCopy.s3, 25,  4, STEP_FUNC_IF);
-    
+
     hashOut[get_local_id(0)] = ABCD[ABCDOFF(get_local_id(0) / 8, get_local_id(0) % 8)];
 }

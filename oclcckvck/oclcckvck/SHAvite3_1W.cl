@@ -54,9 +54,9 @@ static constant uint SHAvite3_512_IV[4][4] = {
 /*! See kernel code for more documentation about that. It's basically a precomputed message pad
 for a 512bit message. */
 static constant uint4 SHAvite3_512_precomputedPadding[4] = {
-    (uint4)(0x00000080, 0x00000000, 0x00000000, 0x00000000), 
-    (uint4)(0x00000000, 0x00000000, 0x00000000, 0x00000000), 
-    (uint4)(0x00000000, 0x00000000, 0x00000000, 0x02000000), 
+    (uint4)(0x00000080, 0x00000000, 0x00000000, 0x00000000),
+    (uint4)(0x00000000, 0x00000000, 0x00000000, 0x00000000),
+    (uint4)(0x00000000, 0x00000000, 0x00000000, 0x02000000),
     (uint4)(0x00000000, 0x00000000, 0x00000000, 0x02000000)
 };
 
@@ -82,15 +82,15 @@ kernel void SHAvite3_1way(global uint *input, global uint *hashOut, global uint 
 #endif
     hashOut += (get_global_id(0) - get_global_offset(0)) * 16;
 
-    
-    
+
+
     local uint TBL0[256], TBL1[256], TBL2[256], TBL3[256];
 #define TABLES TBL0, TBL1, TBL2, TBL3
     event_t ldsReady = async_work_group_copy(TBL0, aes_round_luts + 256 * 0, 256, 0);
     async_work_group_copy(TBL1, aes_round_luts + 256 * 1, 256, ldsReady);
     async_work_group_copy(TBL2, aes_round_luts + 256 * 2, 256, ldsReady);
     async_work_group_copy(TBL3, aes_round_luts + 256 * 3, 256, ldsReady);
-    
+
     uint4 rk[4+4], hashing[4], p[4];
     for(uint init = 0; init < 4; init++) {
         rk[0 + init].s0 = input[init * 4 + 0];
@@ -112,7 +112,7 @@ kernel void SHAvite3_1way(global uint *input, global uint *hashOut, global uint 
         rk[4 + 0] = (uint4)(input[16], input[17], input[18], get_global_id(0));
         rk[4 + 1] = SHAvite3_512_precomputedPadding[0];
         rk[4 + 2] = (uint4)(0, 0, 0, 0x2800000);
-        rk[4 + 3] = (uint4)(0, 0, 0, SHAvite3_512_precomputedPadding[3].w);    
+        rk[4 + 3] = (uint4)(0, 0, 0, SHAvite3_512_precomputedPadding[3].w);
         #if __ENDIAN_LITTLE__
             for(uint i = 0; i < 4; i++) {
                 rk[0 + i].s0 = as_uint(as_uchar4(rk[0 + i].s0).wzyx);
@@ -125,7 +125,7 @@ kernel void SHAvite3_1way(global uint *input, global uint *hashOut, global uint 
             rk[4 + 0].s2 = as_uint(as_uchar4(rk[4 + 0].s2).wzyx);
         #endif
     #endif
-    wait_group_events(1, &ldsReady);     
+    wait_group_events(1, &ldsReady);
     { // Round [0] is the easiest so let's have it there directly.
         uint4 temp; // in lib SPH, that's 'x'
         temp = AESRNK(p[1] ^ rk[0 + 0], TABLES);
@@ -145,7 +145,7 @@ kernel void SHAvite3_1way(global uint *input, global uint *hashOut, global uint 
     #else
         counter.x = 16 * 4 * 8; // 512, 64<<3
     #endif
-    
+
     for(uint round = 1; round < roundCount - 1; ) { // notice those are somewhat a repeating block
         uint4 temp;
         // rounds [1][5][9] are quirky as they mix counter. Very much like [13]

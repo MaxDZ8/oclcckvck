@@ -4,15 +4,17 @@
  * For conditions of distribution and use, see the LICENSE or hit the web.
  */
 #pragma once
-#include "../StopWaitAlgorithm.h"
+#include "../AbstractAlgorithm.h"
 
 namespace algoImplementations {
 
-class QubitFiveStepsCL12 : public StopWaitAlgorithm {
+class QubitFiveStepsCL12 : public AbstractAlgorithm {
 public:
     QubitFiveStepsCL12(cl_context ctx, cl_device_id dev, asizei concurrency)
-        : StopWaitAlgorithm(ctx, dev, concurrency, "Qubit", "fiveSteps", "v1", true) {
-        const asizei passingBytes = concurrency * 16 * sizeof(cl_uint);
+        : AbstractAlgorithm(concurrency, ctx, dev, "Qubit", "fiveSteps", "v1", 16) { }
+
+    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
+        const asizei passingBytes = this->hashCount * 16 * sizeof(cl_uint);
         KnownConstantProvider K; // all the constants are fairly nimble so I don't save nor optimize this in any way!
         auto AES_T_TABLES(K[CryptoConstant::AES_T]);
         auto SIMD_ALPHA(K[CryptoConstant::SIMD_alpha]);
@@ -31,7 +33,8 @@ public:
 
         resources[4].presentationName = "SIMD &alpha; table";
         resources[5].presentationName = "SIMD &beta; table";
-        PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), concurrency);
+        std::vector<std::string> errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        if(errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
         KernelRequest kernels[] = {
@@ -61,8 +64,9 @@ public:
                 "io1, $candidates, $dispatchData, AES_T_TABLES"
             }
         };
-        PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), dev);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
     }
+    bool BigEndian() const { return true; }
 };
 
 }

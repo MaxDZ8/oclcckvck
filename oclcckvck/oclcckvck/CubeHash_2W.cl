@@ -6,7 +6,7 @@
 uint LE_UINT_LOAD(uint v) {
 #if __ENDIAN_LITTLE__
     return as_uint(as_uchar4(v).wzyx);
-#else 
+#else
 #error memory load needs care.
 #endif
 }
@@ -92,7 +92,7 @@ void CubeHash_2W_OddRound(uint *lo, local uint *hi) {
     // In the two-way formulation, swapping LDS columns is dead simple given current layout!
     hi = hi + (get_local_id(0) == 0? 1 : -1);
     // from now on, hi[0*32] is x16 for WI1
-    
+
     hi[1 * 32] += lo[6];
     hi[0 * 32] += lo[7];
     hi[3 * 32] += lo[4];
@@ -108,7 +108,7 @@ void CubeHash_2W_OddRound(uint *lo, local uint *hi) {
     lo[4] = rotate(lo[4], 7u);
     lo[5] = rotate(lo[5], 7u);
     lo[6] = rotate(lo[6], 7u);
-    lo[7] = rotate(lo[7], 7u);    
+    lo[7] = rotate(lo[7], 7u);
     lo[0] ^= hi[(0 + 3) * 32];
     lo[1] ^= hi[(0 + 2) * 32];
     lo[2] ^= hi[(0 + 1) * 32];
@@ -165,12 +165,12 @@ kernel void CubeHash_2way(global uint *input, global uint *hashOut) {
     for(uint i = 0; i < 8; i++) hi[i * 32] = initialState[8 + i][get_local_id(0)];
     input   += (get_global_id(1) - get_global_offset(1)) * 16;
     hashOut += (get_global_id(1) - get_global_offset(1)) * 16 + get_local_id(0);
-    
+
     lo[0] ^= LE_UINT_LOAD(input[1 - get_local_id(0)]);
     lo[1] ^= LE_UINT_LOAD(input[3 - get_local_id(0)]);
     lo[2] ^= LE_UINT_LOAD(input[5 - get_local_id(0)]);
     lo[3] ^= LE_UINT_LOAD(input[7 - get_local_id(0)]);
-    
+
     for(uint pass = 0; pass < 13; pass++) {
         CubeHash_2W_Pass(lo, hi);
         switch(pass) {
@@ -188,7 +188,7 @@ kernel void CubeHash_2way(global uint *input, global uint *hashOut) {
             break;
         }
     }
-    
+
     hashOut[2 * 0] = lo[0];
     hashOut[2 * 1] = lo[1];
     hashOut[2 * 2] = lo[2];

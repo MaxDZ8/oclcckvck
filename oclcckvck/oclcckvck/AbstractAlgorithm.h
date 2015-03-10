@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Massimo Del Zotto
+ * Copyright (C) 2015 Massimo Del Zotto
  * This code is released under the MIT license.
  * For conditions of distribution and use, see the LICENSE or hit the web.
  */
@@ -15,6 +15,8 @@
 #include "../Common/AREN/ScopedFuncCall.h"
 #include <fstream>
 #include "../Common/hashing.h"
+#include "AbstractSpecialValuesProvider.h"
+
 
 //! This enumeration is used by AbstractAlgorithm::Tick to represent the internal state and tell the outer code what to do.
 enum class AlgoEvent {
@@ -57,48 +59,46 @@ With the new design, there are no more settings objects nor 'algorithm instances
 Also, they're now dumb and set up at build time with full type information. External logic gets to select settings and device to use.
 
 The way work is dispatched is also changed but that's better discussed in a derived class. At last, as OpenCL is very convincing I have decided to drop
-support for other APIs and eventually think at it again in the future: this is really AbstractCLAlgorithm. */
+support for other APIs and eventually think at it again in the future: this is really AbstractCLAlgorithm. 
+
+Note the new AbstractAlgorithm is really dumb and does not even know about hashing or anything! It just consumes its inputs when told. Input management
+takes place in "dispatcher objects". \sa StopWaitDispatcher */
 class AbstractAlgorithm {
 public:
     const AlgoIdentifier identifier;
+    const cl_context context;
+    const cl_device_id device;
+    const asizei hashCount;
+    const asizei uintsPerHash; /*!< Mining algorithms should use the following format for the result buffer (buffer of uints):
+        [0] amount of candidate nonces found, let's call it candCount.
+        Candidate[candCount], where the Candidate structure is
+            uint nonce;
+            uint hash[uintsPerHash]
+        It is strongly suggested they produce an hash out so it can be checked for validity. */
 
     /*! This is computed as a side-effect of PrepareKernels and not much of a performance path.
-    Represents the specific algorithm-implementation and version. Computed as a side effect of PrepareKernels */
+    Represents the specific algorithm-implementation and version. Computed as a side effect of PrepareKernels, which is supposed to be called by Init(). */
     aulong GetVersioningHash() const { return aiSignature; }
 
-    /*! Algorithms continuously mangle data coming out of a certain header. The outer program pumps here header data every time needed.
-    It is also necessary to identify header originator. Every time the algorithm is Tick()-ed, the algorithm will attempt to dispatch a
-    new set of work consuming nonce values until exhausting. Giving the algo a new header is the only way to reset the nonce count.
-    \note Setting a new header <b>does not</b> cancel work being carried out, which will be completed late. Therefore, it is still possible
-    to get values from the previous job/pool setting.
-    \note Mining algorithms don't care from where an header comes. All they care is the headers only. When nonces are produced, they will
-    associate them to the header used to produce them. Outer code must recostruct the association. */
-    void Header(const std::array<aubyte, 80> &header) {
-        hashing.header = header;
-        hashing.nonceBase = 0;
-    }
+    /*! Performs all the heavy duty required to create the resources to run the algorithm. Returns a list of all errors encountered.
+    Those are really errors, so if something non-empty is returned you should bail out.
+    Call this immediately after CTOR. Must be called before Tick, GetEvents, GetResults, GetVersioningHash. */
+    virtual std::vector<std::string> Init(AbstractSpecialValuesProvider &specialValues) = 0;
 
-    /*! Another thing algorithms deal with are (at least) the target bits, which are a function of "difficulty" which in fact does
-    not exist. At network level only target bits exists. Stratum tries to "compress" them in difficulty (which is a "human-readable" number)
-    and them maps it back to target bits. See https://bitcointalk.org/index.php?topic=957516. */
-    void TargetBits(aulong reference) { hashing.target = reference; }
+    //! If this returns true you're supposed to not dispatch any more work but rather upload new hash data and restart scanning hashes from 0.
+    bool Overflowing() const { return nonceBase + hashCount > std::numeric_limits<auint>::max(); };
 
-    /*! This is conceptually similar to "scan hash" operation in legacy miners BUT it allows to mix CPU-GPU processing.
-    The list to pass here is a list of waiting events belonging to this algorithm instance (that is, returned by this->GetEvents) which
-    triggered (woke up thread by clWaitForEvents). Implementations can assume those events belong to them and signal complete operation.
-    Implementations are free to avoid checking the event status by GL so it is imperative triggered events are kept!
-    Implementations are NOT required to remove "consumed" events and can also generate new events so the outer code must drop the list
-    on return as it's no longer meaningful. */
-    virtual AlgoEvent Tick(const std::vector<cl_event> &blockers) = 0;
+    //! Returns true if algorithm expects block input hash in big-endian form. Dispatcher will have to pack data differently.
+    virtual bool BigEndian() const = 0;
 
-    /*! At least one of the returned events must complete before the algorithm can continue. In the case of GPU-only, single-phase algos
-    those will be wait on buffer maps for results but this does not have to be the case for all others. Implementations are required to ADD
-    their events to the provided vector leaving all the other elements untouched. This allows to build a single list to wait. */
-    virtual void GetEvents(std::vector<cl_event> &events) const = 0;
+    /*! Using the provided command-queue/device assume all input buffers have been correctly setup and run a whole algorithm iteration (all involved steps).
+    Compute exactly <i>amount</i> hashes, starting from hash=nonceBase.
+    It is assumed count <= this->hashCount.
+    \note Some kernels have requirements on workgroup size and thus put a requirement on amount being a multiple of WG size.
+    Of course this base class does not care; derived classes must be careful with setup, including rebinding special resources. */
+    void RunAlgorithm(cl_command_queue q, asizei amount);
 
-    /*! Return a set of found nonces, making the algorithm able to dispatch some work again. Note this does not return any other data,
-    Nonces structure will have to be built by outer code. */
-    virtual MinedNonces GetResults() = 0;
+    void Restart(asizei nonceStart = 0) { nonceBase = nonceStart; }
 
 protected:
     struct WorkGroupDimensionality {
@@ -131,6 +131,9 @@ protected:
 
         std::string presentationName; //!< only used when not empty, overrides name for user-presentation purposes
 
+        bool useProvidedBuffer; //!< true if initialData is to be used from host memory directly, only relevant at buffer creation
+                                //!< \note For immediates, the initialData pointer is rebased to imValue anyway so this is a bit moot.
+
         explicit ResourceRequest() { }
         ResourceRequest(const char *name, cl_mem_flags allocationFlags, asizei footprint, const void *initialize = nullptr) {
             this->name = name;
@@ -140,6 +143,7 @@ protected:
             immediate = false;
             memset(&channels, 0, sizeof(channels));
             memset(&imageDesc, 0, sizeof(imageDesc));
+            useProvidedBuffer = false;
         }
         ResourceRequest(const ResourceRequest &src) { // note: this is default copy ctor, it is fine... except not when this is an immediate
             name = src.name;    // a better way to do this would be to have a base class (?)
@@ -168,21 +172,26 @@ protected:
                    across devices... but they currently don't.
         \param dev This is the device this algorithm is going to use for the bulk of processing. Note complicated algos might be hybrid GPU-CPU
                    and thus require multiple devices. This extension is really only meaningful for a derived class.
+
+        Don't mess with CL here. Actual heavy lifting in Init()! Ideally this should be NOP.
     */
-    AbstractAlgorithm(cl_context ctx, cl_device_id dev, const char *algo, const char *imp, const char *ver)
-        : identifier(algo, imp, ver), context(ctx), device(dev) {
+    AbstractAlgorithm(asizei numHashes, cl_context ctx, cl_device_id dev, const char *algo, const char *imp, const char *ver, asizei candHashUints)
+        : identifier(algo, imp, ver), context(ctx), device(dev), hashCount(numHashes), uintsPerHash(candHashUints) {
     }
 
     /*! Derived classes are expected to call this somewhere in their ctor. It deals with allocating memory and eventually initializing it in a
-    data-driven way. Note special resources cannot be created using this, at least in theory. Just create them in the ctor before PrepareKernels. */
-    void PrepareResources(ResourceRequest *resources, asizei numResources, asizei hashCount);
+    data-driven way. Note special resources cannot be created using this, at least in theory. Just create them in the ctor before PrepareKernels. 
+    While this is allowed to throw, it is suggested to produce a list of errors to be returned by Init(). */
+    std::vector<std::string> PrepareResources(ResourceRequest *resources, asizei numResources, asizei hashCount, const AbstractSpecialValuesProvider &specialValues);
 
     //! Similarly, kernels are described by data and built by resolving the previously declared resources. Device used to pull out eventual error logs.
-    void PrepareKernels(KernelRequest *kernels, asizei numKernels, cl_device_id dev);
+    std::vector<std::string> PrepareKernels(KernelRequest *kernels, asizei numKernels, AbstractSpecialValuesProvider &specialValues);
 
     struct KernelDriver : WorkGroupDimensionality {
         cl_kernel clk;
-        std::vector< std::pair<cl_uint, cl_uint> > dtBindings; //!< dispatch time bindings. .first is algo index, .second is resource index to be remapped.
+        std::vector< std::pair<cl_uint, LateBinding> > dtBindings; /*!< dispatch time bindings. For each element,
+                                                                   .first is algorithm parameter index,
+                                                                   .second is *persistent* buffer where AbstractSpecialValuesProvider will push! */
         explicit KernelDriver() = default;
         KernelDriver(const WorkGroupDimensionality &wgd, cl_kernel k) : WorkGroupDimensionality(wgd) { clk = k; }
     };
@@ -191,56 +200,17 @@ protected:
     std::vector<ResourceRequest> resRequests;
     std::map<std::string, cl_mem> resHandles;
 
-    struct {
-        std::array<aubyte, 80> header;
-        aulong nonceBase; //!< this is 64 bit and considered "exhausted" when over 32 bit range.
-        aulong target;
-    } hashing;
-
-    /*! Using the provided command-queue/device assume all input buffers have been correctly setup and run a whole algorithm iteration (all involved steps).
-    Compute exactly amount hashes, each one being i+base-th. That is, base is the global work offset (from hashing.nonceBase).
-    It is guaranteed hashCount <= this->concurrency.
-    \note Some kernels have requirements on workgroup size and thus put a requirement on amount being a multiple of WG size.
-    Of course this base class does not care; derived classes must be careful with setup, including rebinding special resources. */
-    void RunAlgorithm(cl_command_queue q, asizei hashCount) const;
-
-    /*! Some values are special as they need to be bound on a per-dispatch basis... in certain cases.
-    This structure allows this base class to understand if a value is "special". Do not confuse those with "known constant" values, which are special
-    but in a different way. They are, by definition, constant and thus not "special" in this sense. */
-    struct SpecialValueBinding {
-        bool earlyBound; //!< true if this parameter can be bound to the kernel once and left alone forever. Otherwise, call DispatchBinding.
-        union {
-            cl_mem buff;   //!< buffer holding the specific resource. Use when earlyBound.
-            cl_uint index; //!< resource index (to be mapped to a specific buffer) for dispatch-time binding.
-        } resource;
-    };
-
-    /*! This function returns false if the given name does not identify something recognized.
-    Otherwise, it will set desc. You can be sure at this point desc.resource will always be != 0.
-    While there are no requirements on the special value names, please follow these guidelines:
-    - All special value names start with '$'.
-    - "$wuData" is the 80-bytes block header to hash. Yes, 80 bytes, even though we overwrite the last 4 (most of the time).
-    - "$dispatchData" contains "other stuff" including targetbits... note those are probably going to be refactored as well.
-    - "$candidates" is the resulting nonce buffer.
-    Those can be bound early or dinamically, there's no requirement. */
-    virtual bool SpecialValue(SpecialValueBinding &desc, const std::string &name) = 0;
-
     /*! Late-bound buffers. This is indexed by SpecialValueBinding::index.
     Derived classes shall update this before allowing this class RunAlgorithm to run as it needs to access this to map to the correct values. */
     std::vector<cl_mem> lbBuffers;
 
-    //! The concurrency (aka hashCount) is the maximum amount of work items which can be dispatched in a single call.
-    //! For the time being, it's also the only amount which can be dispatched!
-    virtual asizei GetConcurrency() const = 0;
-
 private:
-    const cl_context context;
-    const cl_device_id device;
-    aulong aiSignature; //!< \sa GetVersioningHash()
+    aulong aiSignature = 0; //!< \sa GetVersioningHash()
+    asizei nonceBase = 0;
 
     //! Called at the end of PrepareKernels. Given a cl_kernel and its originating KernelRequest object, generates a stream of clSetKernelArg according
     //! to its internal bindings, resHandles and resRequests (for immediates).
-    void BindParameters(KernelDriver &kd, const KernelRequest &bindings);
+    void BindParameters(KernelDriver &kd, const KernelRequest &bindings, AbstractSpecialValuesProvider &specialValues);
 
     /*! Called at the end of PrepareKernels as an aid. Combines kernel file names, entrypoints, compile flags algo name and everything
     required to uniquely identify what's going to be run. */

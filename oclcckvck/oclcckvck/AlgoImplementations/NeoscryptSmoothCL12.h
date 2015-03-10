@@ -4,21 +4,23 @@
  * For conditions of distribution and use, see the LICENSE or hit the web.
  */
 #pragma once
-#include "../StopWaitAlgorithm.h"
+#include "../AbstractAlgorithm.h"
 
 namespace algoImplementations {
 
-class NeoscryptSmoothCL12 : public StopWaitAlgorithm {
+class NeoscryptSmoothCL12 : public AbstractAlgorithm {
 public:
     NeoscryptSmoothCL12(cl_context ctx, cl_device_id dev, asizei concurrency)
-        : StopWaitAlgorithm(ctx, dev, concurrency, "Neoscrypt", "smooth", "v1", false) {
+        : AbstractAlgorithm(concurrency, ctx, dev, "Neoscrypt", "smooth", "v1", 8) { }
+
+    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
         ResourceRequest resources[] = {
-            ResourceRequest("buffA", CL_MEM_HOST_NO_ACCESS, (256 + 64) * concurrency),
-            ResourceRequest("buffB", CL_MEM_HOST_NO_ACCESS, (256 + 32) * concurrency),
-            ResourceRequest("kdfResult", CL_MEM_HOST_NO_ACCESS, 256 * concurrency),
-            ResourceRequest("pad", CL_MEM_HOST_NO_ACCESS, 32 * 1024 * concurrency),
-            ResourceRequest("xo", CL_MEM_HOST_NO_ACCESS, 256 * concurrency),
-            ResourceRequest("xi", CL_MEM_HOST_NO_ACCESS, 256 * concurrency),
+            ResourceRequest("buffA", CL_MEM_HOST_NO_ACCESS, (256 + 64) * hashCount),
+            ResourceRequest("buffB", CL_MEM_HOST_NO_ACCESS, (256 + 32) * hashCount),
+            ResourceRequest("kdfResult", CL_MEM_HOST_NO_ACCESS, 256 * hashCount),
+            ResourceRequest("pad", CL_MEM_HOST_NO_ACCESS, 32 * 1024 * hashCount),
+            ResourceRequest("xo", CL_MEM_HOST_NO_ACCESS, 256 * hashCount),
+            ResourceRequest("xi", CL_MEM_HOST_NO_ACCESS, 256 * hashCount),
             Immediate<cl_uint>("LOOP_ITERATIONS", 128),
             Immediate<cl_uint>("KDF_CONST_N", 32),
             Immediate<cl_uint>("STATE_SLICES", 4),
@@ -31,7 +33,8 @@ public:
         resources[3].presentationName = "X values buffer";
         resources[4].presentationName = "Salsa results";
         resources[5].presentationName = "Chacha results";
-        PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), concurrency);
+        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        if(errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
         KernelRequest kernels[] = {
@@ -66,8 +69,9 @@ public:
                 "$candidates, $dispatchData, xo, xi, KDF_CONST_N, buffA, buffB, pad"
             }
         };
-        PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), dev);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
     }
+    bool BigEndian() const { return false; }
 };
 
 }
