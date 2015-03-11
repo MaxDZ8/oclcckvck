@@ -1,4 +1,6 @@
 # OpenCL Crypto Currency Kernel Validity ChecK
+<img src="http://maxdz8.github.io/oclcckvck/oclcckvck.png"/>
+
 This project is an M8M spinoff.
 
 Many users report issues with M8M compatibility across drivers or hardware. While those errors are being addressed, there's definitely the need to provide a somewhat insulated testing enviroment. 
