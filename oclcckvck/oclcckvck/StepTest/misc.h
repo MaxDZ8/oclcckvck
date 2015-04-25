@@ -30,8 +30,13 @@ struct BadResultsList {
         for(const DetailedMismatch &big : mismatch) { big.Describe(conc);    conc<<std::endl; }
         conc<<std::endl<<more.size()<<" other wrong hashes:"<<std::endl;
         bool first = true;
+        asizei output = 0;
         for(auto small : more) {
             if(!first) conc<<", ";
+            if(output++ > 64) {
+                output -= 65;
+                conc<<std::endl;
+            }
             first = false;
             conc<<small;
         }
@@ -92,7 +97,15 @@ public:
     //! this and the dispatcher has been called.
     void MakeInputData(StopWaitDispatcher &disp) {
         for(auto &i : dummyHeader) i = random();
-        disp.BlockHeader(dummyHeader);
+        if(disp.algo.BigEndian()) {
+            auto endianess(dummyHeader);
+            for(auto i = 0; i < endianess.size(); i += 4) {
+                std::swap(endianess[i + 0], endianess[i + 3]);
+                std::swap(endianess[i + 1], endianess[i + 2]);
+            }
+            disp.BlockHeader(endianess);
+        }
+        else disp.BlockHeader(dummyHeader);
         disp.TargetBits(0ull); // not used for me anyway!
     }
 

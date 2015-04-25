@@ -515,10 +515,11 @@ void groestl(ulong *hashOut, local ulong *tables, global uchar *header, global u
 #else
     H[15] = (ulong)512;
 #endif
+    uint nonce = (uint)(get_global_id(0));
     ulong g[16], m[16];
     for(int init = 0; init < 10; init++) m[init] = memtoreg(header + init * 8);
     m[9] &= 0x00000000FFFFFFFF;
-    m[9] |= ((ulong) get_global_id(0) << 32);
+    m[9] |= ((ulong) nonce << 32);
     m[10] = 0x80;
     m[11] = 0;
     m[12] = 0;

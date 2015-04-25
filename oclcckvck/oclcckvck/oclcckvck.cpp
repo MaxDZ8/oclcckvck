@@ -228,7 +228,7 @@ void Dispatch(const std::vector<Platform> &plats, const std::vector<cl_context> 
                 return ret + ".txt";
             };
             try {
-                auto errors(imp.Init(dispatcher.AsValueProvider()));
+                auto errors(imp.Init(nullptr, dispatcher.AsValueProvider(), ""));
                 hexSign = imp.GetVersioningHash()? Hex(imp.GetVersioningHash()) : std::string("-failed_to_init");
                 if(errors.size()) {
                     std::string meh;
@@ -236,7 +236,7 @@ void Dispatch(const std::vector<Platform> &plats, const std::vector<cl_context> 
                     throw meh;
                 }
                 TestData test;
-                if(opt_verbose) std::cout<<"Testing "<<presentation<<" ("<<hexSign<<") on platform["<<p<<"].device["<<d<<"]\n";
+                if(opt_verbose) std::cout<<"Testing "<<presentation<<" ("<<hexSign<<") on plat"<<p<<".dev"<<d<<"\n";
                 if(!test.CanRunTests(concurrency)) {
                     std::string msg(presentation);
                     msg += " cannot be tested with concurrency " + std::to_string(concurrency);
@@ -259,7 +259,7 @@ void Dispatch(const std::vector<Platform> &plats, const std::vector<cl_context> 
                 const auto finished(std::chrono::system_clock::now());
                 if(errors.size()) {
                     std::string allErrors(Header(imp.identifier, hexSign) + Header(plats, p, d));
-                    for(auto err : errors) allErrors += err;
+                    for(auto err : errors) allErrors += err + '\n';
                     throw allErrors;
                 }
                 if(opt_verbose) std::cout<<std::endl;
@@ -291,17 +291,18 @@ void Compare(const std::vector<Platform> &plats, const std::vector<cl_context> &
                 return ret + ".txt";
             };
             try {
-                auto errors(test.algo.Init(dispatcher.AsValueProvider()));
+                auto errors(test.algo.Init(nullptr, dispatcher.AsValueProvider(), ""));
                 hexSign = test.algo.GetVersioningHash()? Hex(test.algo.GetVersioningHash()) : std::string("-failed_to_init");
                 if(errors.size()) {
                     std::string meh;
                     for(auto err : errors) meh += err + "\n\n";
                     throw meh;
                 }
-                if(opt_verbose) std::cout<<"Testing "<<presentation<<" ("<<hexSign<<") on platform["<<p<<"].device["<<d<<"]\n";
+                if(opt_verbose) std::cout<<"Testing "<<presentation<<" ("<<hexSign<<") on plat"<<p<<".dev"<<d<<"\n";
                 // It is assumed steps complete in a single dispatch so no need to iterate up to producing results!
+                std::set<cl_event> triggered;
+                while(dispatcher.Tick(triggered) != AlgoEvent::working) { }
                 std::vector<cl_event> blockers;
-                while(dispatcher.Tick(blockers) != AlgoEvent::working) { }
                 dispatcher.GetEvents(blockers);
                 if(blockers.size()) { // step tests can still blocking map.
                     clWaitForEvents(cl_uint(blockers.size()), blockers.data());

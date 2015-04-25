@@ -109,7 +109,8 @@ kernel void SHAvite3_1way(global uint *input, global uint *hashOut, global uint 
     #ifdef HEAD_OF_CHAINED_HASHING
         // Some values are to be fetched differently. In theory I should do that right since the beginning
         // but it's easier to read this way.
-        rk[4 + 0] = (uint4)(input[16], input[17], input[18], get_global_id(0));
+        uint nonce = (uint)(get_global_id(0));
+        rk[4 + 0] = (uint4)(input[16], input[17], input[18], nonce);
         rk[4 + 1] = SHAvite3_512_precomputedPadding[0];
         rk[4 + 2] = (uint4)(0, 0, 0, 0x2800000);
         rk[4 + 3] = (uint4)(0, 0, 0, SHAvite3_512_precomputedPadding[3].w);

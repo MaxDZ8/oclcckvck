@@ -30,11 +30,11 @@ struct Luffa_1W : public AbstractAlgorithm {
     Luffa_1W(cl_context ctx, cl_device_id dev, asizei concurrency)
         : AbstractAlgorithm(concurrency, ctx, dev, "LUFFA", "1-way", "v1", 0), passingBytes(concurrency * 16 * sizeof(cl_uint)) { }
 
-    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
+    std::vector<std::string> Init(ConfigDesc *desc, AbstractSpecialValuesProvider &specials, const std::string &loadPathPrefix) {
         ResourceRequest resources[] = {
             ResourceRequest("io0", CL_MEM_HOST_READ_ONLY, passingBytes),
         };
-        std::vector<std::string> errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        std::vector<std::string> errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), specials));
         if(errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
@@ -45,7 +45,7 @@ struct Luffa_1W : public AbstractAlgorithm {
                 "$wuData, io0"
             }
         };
-        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials, loadPathPrefix);
     }
     bool BigEndian() const { return true; }
 
@@ -82,6 +82,7 @@ struct Luffa_1W : public AbstractAlgorithm {
         clEnqueueUnmapMemObject(cq, resBuffer, blob, 0, NULL, NULL);
         blob = 0;
     }
+    aulong GetDifficultyNumerator() const { return 0; } // unused, not a real mining algo
 };
 
 

@@ -105,7 +105,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;TEST_QUBIT_FIVESTEPS;TEST_MYRGRS_MONOLITHIC;TEST_FRESH_WARM;TEST_NEOSCRYPT_SMOOTH;TEST_LUFFA_1W_HEAD;TEST_CUBEHASH_2W_CHAINED;TEST_SHAVITE3_1W_CHAINED;TEST_SIMD_16W_CHAINED;TEST_ECHO_8W_TAIL;TEST_NS_FIRSTKDF_4W_HEAD;TEST_NS_LASTKDF_4W_TAIL;TEST_NS_SW_SALSA;TEST_NS_SW_CHACHA;TEST_NS_IR_SALSA;TEST_NS_IR_CHACHA;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
     </ClCompile>
     <Link>

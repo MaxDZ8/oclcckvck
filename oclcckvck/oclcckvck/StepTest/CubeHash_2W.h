@@ -31,13 +31,13 @@ struct CubeHash_2W : public AbstractAlgorithm {
         for(auto &i : dummyPrevious) i = random();
     }
 
-    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
+    std::vector<std::string> Init(ConfigDesc *desc, AbstractSpecialValuesProvider &specials, const std::string &loadPathPrefix) {
         const asizei passingBytes = this->hashCount * 16 * sizeof(cl_uint);
         ResourceRequest resources[] = {
             ResourceRequest("io0", CL_MEM_HOST_WRITE_ONLY | CL_MEM_READ_ONLY, passingBytes, dummyPrevious.data()),
             ResourceRequest("io1", CL_MEM_HOST_READ_ONLY | CL_MEM_WRITE_ONLY, passingBytes),
         };
-        std::vector<std::string> errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        std::vector<std::string> errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), specials));
         if(errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
@@ -48,7 +48,7 @@ struct CubeHash_2W : public AbstractAlgorithm {
                 "io0, io1"
             }
         };
-        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials, loadPathPrefix);
     }
     bool BigEndian() const { return true; }
 
@@ -83,6 +83,7 @@ struct CubeHash_2W : public AbstractAlgorithm {
         clEnqueueUnmapMemObject(cq, resBuffer, blob, 0, NULL, NULL);
         blob = 0;
     }
+    aulong GetDifficultyNumerator() const { return 0; } // unused, not a real mining algo
 };
 
 

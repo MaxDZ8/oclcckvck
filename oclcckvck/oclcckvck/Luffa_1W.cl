@@ -171,7 +171,8 @@ kernel void Luffa_1way(global uint *wuData, global uint *hashOut) {
             M = (uint8)(wuData[ 8], wuData[ 9], wuData[10], wuData[11],
                         wuData[12], wuData[13], wuData[14], wuData[15]);
         } else if(i == 1) {
-            M = (uint8)(wuData[16], wuData[17], wuData[18], as_uint(as_uchar4(get_global_id(0)).wzyx),
+            const uint nonce = (uint)get_global_id(0);
+            M = (uint8)(wuData[16], wuData[17], wuData[18], as_uint(as_uchar4(nonce).wzyx),
                         0x80000000u, 0, 0, 0);
         } else if(i == 2) {
             M = (uint8)(0);

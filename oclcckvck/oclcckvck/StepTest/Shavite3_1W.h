@@ -31,7 +31,7 @@ struct ShaVite3_1W : public AbstractAlgorithm {
         for(auto &i : dummyPrevious) i = random();
     }
 
-    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
+    std::vector<std::string> Init(ConfigDesc *desc, AbstractSpecialValuesProvider &specials, const std::string &loadPathPrefix) {
         const asizei passingBytes = this->hashCount * 16 * sizeof(cl_uint);
         KnownConstantProvider K; // all the constants are fairly nimble so I don't save nor optimize this in any way!
         auto AES_T_TABLES(K[CryptoConstant::AES_T]);
@@ -41,7 +41,7 @@ struct ShaVite3_1W : public AbstractAlgorithm {
             ResourceRequest("AES_T_TABLES", CL_MEM_HOST_NO_ACCESS | CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, AES_T_TABLES.second, AES_T_TABLES.first),
             Immediate<cl_uint>("sh3_roundCount", 14),
         };
-        std::vector<std::string> errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        std::vector<std::string> errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), specials));
         if(errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
@@ -52,7 +52,7 @@ struct ShaVite3_1W : public AbstractAlgorithm {
                 "io1, io0, AES_T_TABLES, sh3_roundCount"
             }
         };
-        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials, loadPathPrefix);
     }
     bool BigEndian() const { return true; }
 
@@ -84,6 +84,7 @@ struct ShaVite3_1W : public AbstractAlgorithm {
         clEnqueueUnmapMemObject(cq, resBuffer, blob, 0, NULL, NULL);
         blob = 0;
     }
+    aulong GetDifficultyNumerator() const { return 0; } // unused, not a real mining algo
 };
 
 

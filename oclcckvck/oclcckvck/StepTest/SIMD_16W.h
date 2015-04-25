@@ -31,7 +31,7 @@ struct SIMD_16W : public AbstractAlgorithm {
         for(auto &i : dummyPrevious) i = random();
     }
 
-    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
+    std::vector<std::string> Init(ConfigDesc *desc, AbstractSpecialValuesProvider &specials, const std::string &loadPathPrefix) {
         const asizei passingBytes = dummyPrevious.size() * sizeof(cl_uint);
         KnownConstantProvider K; // all the constants are fairly nimble so I don't save nor optimize this in any way!
         auto SIMD_ALPHA(K[CryptoConstant::SIMD_alpha]);
@@ -42,7 +42,7 @@ struct SIMD_16W : public AbstractAlgorithm {
             ResourceRequest("SIMD_ALPHA", CL_MEM_HOST_NO_ACCESS | CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, SIMD_ALPHA.second, SIMD_ALPHA.first),
             ResourceRequest("SIMD_BETA", CL_MEM_HOST_NO_ACCESS | CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, SIMD_BETA.second, SIMD_BETA.first),
         };
-        std::vector<std::string> errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        std::vector<std::string> errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), specials));
         if (errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
@@ -53,7 +53,7 @@ struct SIMD_16W : public AbstractAlgorithm {
                 "io0, io1, io0, SIMD_ALPHA, SIMD_BETA"
             }
         };
-        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials, loadPathPrefix);
     }
     bool BigEndian() const { return true; }
 
@@ -85,6 +85,7 @@ struct SIMD_16W : public AbstractAlgorithm {
         clEnqueueUnmapMemObject(cq, resBuffer, blob, 0, NULL, NULL);
         blob = 0;
     }
+    aulong GetDifficultyNumerator() const { return 0; } // unused, not a real mining algo
 };
 
 

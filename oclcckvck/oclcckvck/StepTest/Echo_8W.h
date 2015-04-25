@@ -30,7 +30,7 @@ struct ECHO_8W : public AbstractAlgorithm {
         for(auto &i : dummyPrevious) i = random();
     }
 
-    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
+    std::vector<std::string> Init(ConfigDesc *desc, AbstractSpecialValuesProvider &specials, const std::string &loadPathPrefix) {
         const asizei passingBytes = this->hashCount * 16 * sizeof(cl_uint);
         KnownConstantProvider K; // all the constants are fairly nimble so I don't save nor optimize this in any way!
         auto AES_T_TABLES(K[CryptoConstant::AES_T]);
@@ -38,7 +38,7 @@ struct ECHO_8W : public AbstractAlgorithm {
             ResourceRequest("io1", CL_MEM_HOST_WRITE_ONLY | CL_MEM_READ_ONLY, passingBytes, dummyPrevious.data()),
             ResourceRequest("AES_T_TABLES", CL_MEM_HOST_NO_ACCESS | CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, AES_T_TABLES.second, AES_T_TABLES.first)
         };
-        std::vector<std::string> errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        std::vector<std::string> errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), specials));
         if(errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
@@ -49,7 +49,7 @@ struct ECHO_8W : public AbstractAlgorithm {
                 "io1, $candidates, $dispatchData, AES_T_TABLES"
             }
         };
-        errors = PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
+        errors = PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials, loadPathPrefix);
         if(errors.size() == 0) {
             SpecialValueBinding desc;
             if(specials.SpecialValue(desc, "$candidates") == false) throw "Impossible: $candidates not found, but binding successful.";
@@ -71,6 +71,7 @@ struct ECHO_8W : public AbstractAlgorithm {
         }
         return (aulong(refHash[7]) << 32) | refHash[6];
     }
+    aulong GetDifficultyNumerator() const { return 0; } // unused, not a real mining algo
 };
 
 

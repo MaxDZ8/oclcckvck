@@ -249,7 +249,8 @@ void FillInitialBuffer(global uchar *target, size_t extraBytes, local uint *patt
 	wait_group_events(1, &copied);
 	// Now let's reset the various nonce values. It's just easier to do that using standard writes.
 	// In theory I should do that even for remaining and extrabytes, but I don't.
-	const uchar gidByte = get_global_id(1) >> (8 * get_local_id(0));
+	const uint nonce = (uint)(get_global_id(1));
+	const uchar gidByte = nonce >> (8 * get_local_id(0));
 	target += (get_global_id(1) - get_global_offset(1)) * total;
 	for(uint out = 0; out < fullBlocks; out++) {
 		const uint off = blockLen * 4 * out + (blockLen - 1) * 4;
@@ -395,7 +396,8 @@ kernel void lastKDF_4way(volatile global uint *found, global uint *dispatchData,
 		lds[get_local_id(1)] = magic < target;
         if(magic < target) {
 			uint storage = atomic_inc(found);
-			found[1 + storage * (outLen / 4 + 1)] = as_uint(as_uchar4(get_global_id(1)).wzyx);
+			uint nonce = (uint)(get_global_id(1));
+			found[1 + storage * (outLen / 4 + 1)] = as_uint(as_uchar4(nonce).wzyx);
 			lds[get_local_size(1) + get_local_id(1)] = storage;
 		}
 	}

@@ -118,7 +118,7 @@ public:
         for(auto &i : dummyPrevious) i = random();
     }
 
-    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
+    std::vector<std::string> Init(ConfigDesc *desc, AbstractSpecialValuesProvider &specials, const std::string &loadPathPrefix) {
         ResourceRequest resources[] = {
             ResourceRequest("kdfResult", CL_MEM_HOST_NO_ACCESS, 256 * hashCount, dummyPrevious.data()),
             ResourceRequest("pad", CL_MEM_HOST_READ_ONLY | CL_MEM_WRITE_ONLY, 32 * 1024 * hashCount),
@@ -127,7 +127,7 @@ public:
             Immediate<cl_uint>("STATE_SLICES", 4),
             Immediate<cl_uint>("MIX_ROUNDS", 10),
         };
-        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), specials));
         if(errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
@@ -139,7 +139,7 @@ public:
                 "kdfResult, pad, LOOP_ITERATIONS, STATE_SLICES, MIX_ROUNDS, xo"
             }
         };
-        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials, loadPathPrefix);
     }
     bool BigEndian() const { return false; }
 
@@ -216,6 +216,7 @@ public:
         clEnqueueUnmapMemObject(cq, xoBuff, xoMap, 0, NULL, NULL);
         padMap = xoMap = nullptr;
     }
+    aulong GetDifficultyNumerator() const { return 0; } // unused, not a real mining algo
 };
 
 
@@ -239,7 +240,7 @@ public:
         for(auto &i : bigPad) i = random();
     }
 
-    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
+    std::vector<std::string> Init(ConfigDesc *desc, AbstractSpecialValuesProvider &specials, const std::string &loadPathPrefix) {
         ResourceRequest resources[] = {
             ResourceRequest("pad", CL_MEM_HOST_NO_ACCESS, 32 * 1024 * hashCount, bigPad.data()),
             ResourceRequest("xo", CL_MEM_HOST_READ_ONLY, 256 * hashCount, bigState.data()),
@@ -247,7 +248,7 @@ public:
             Immediate<cl_uint>("STATE_SLICES", 4),
             Immediate<cl_uint>("MIX_ROUNDS", 10)
         };
-        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), specials));
         if(errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
@@ -259,7 +260,7 @@ public:
                 "xo, pad, LOOP_ITERATIONS, STATE_SLICES, MIX_ROUNDS"
             }
         };
-        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials, loadPathPrefix);
     }
     bool BigEndian() const { return false; }
 
@@ -322,6 +323,7 @@ public:
         clEnqueueUnmapMemObject(cq, xoBuff, xoMap, 0, NULL, NULL);
         xoMap = nullptr;
     }
+    aulong GetDifficultyNumerator() const { return 0; } // unused, not a real mining algo
 };
 
 

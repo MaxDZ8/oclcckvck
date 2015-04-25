@@ -13,7 +13,7 @@ public:
     NeoscryptSmoothCL12(cl_context ctx, cl_device_id dev, asizei concurrency)
         : AbstractAlgorithm(concurrency, ctx, dev, "Neoscrypt", "smooth", "v1", 8) { }
 
-    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
+    std::vector<std::string> Init(ConfigDesc *desc, AbstractSpecialValuesProvider &specials, const std::string &loadPathPrefix) {
         ResourceRequest resources[] = {
             ResourceRequest("buffA", CL_MEM_HOST_NO_ACCESS, (256 + 64) * hashCount),
             ResourceRequest("buffB", CL_MEM_HOST_NO_ACCESS, (256 + 32) * hashCount),
@@ -33,7 +33,8 @@ public:
         resources[3].presentationName = "X values buffer";
         resources[4].presentationName = "Salsa results";
         resources[5].presentationName = "Chacha results";
-        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        if(desc) return DescribeResources(*desc, resources, sizeof(resources) / sizeof(resources[0]), specials);
+        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), specials));
         if(errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
@@ -69,9 +70,10 @@ public:
                 "$candidates, $dispatchData, xo, xi, KDF_CONST_N, buffA, buffB, pad"
             }
         };
-        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials, loadPathPrefix);
     }
     bool BigEndian() const { return false; }
+    aulong GetDifficultyNumerator() const { return 0xFFFF000000000000ull; }
 };
 
 }

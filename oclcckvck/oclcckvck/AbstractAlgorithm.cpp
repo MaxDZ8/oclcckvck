@@ -6,7 +6,30 @@
 #include "AbstractAlgorithm.h"
 
 
-std::vector<std::string> AbstractAlgorithm::PrepareResources(ResourceRequest *resources, asizei numResources, asizei hashCount, const AbstractSpecialValuesProvider &prov) {
+std::vector<std::string> AbstractAlgorithm::DescribeResources(ConfigDesc &desc, ResourceRequest *resources, asizei numResources, const AbstractSpecialValuesProvider &specialValues) const {
+    desc.hashCount = hashCount;
+    desc.memUsage.reserve(numResources);
+    auto isHOST = [](cl_mem_flags mask) -> bool {
+        bool ret = false;
+        ret |= (mask & CL_MEM_USE_HOST_PTR) != 0;
+        ret |= (mask & CL_MEM_ALLOC_HOST_PTR) != 0;
+        ret |= (mask & CL_MEM_HOST_WRITE_ONLY) != 0; // not really necessary
+        return ret != 0;
+    };
+    for(auto res = resources; res != resources + numResources; res++) {
+        if(res->immediate) continue; // whatever this holds true depends on implementation but usually irrelevant in terms of estimating consumption.
+        ConfigDesc::MemDesc build;
+        build.presentation = res->presentationName.empty()? res->name : res->presentationName;
+        if(res->bytes != auint(res->bytes)) throw std::exception("Buffer exceeds 4GiB, not supported for the time being.");
+        build.bytes = auint(res->bytes);
+        build.memoryType = isHOST(res->memFlags)? ConfigDesc::as_host : ConfigDesc::as_device;
+        desc.memUsage.push_back(std::move(build));
+    }
+    return std::vector<std::string>();
+}
+
+
+std::vector<std::string> AbstractAlgorithm::PrepareResources(ResourceRequest *resources, asizei numResources, const AbstractSpecialValuesProvider &prov) {
     std::vector<std::string> errors;
     for(auto res = resources; res != resources + numResources; res++) {
         if(resHandles.find(res->name) != resHandles.cend()) throw std::string("Duplicated resource name \"" + res->name + '"');
@@ -53,25 +76,26 @@ std::vector<std::string> AbstractAlgorithm::PrepareResources(ResourceRequest *re
 }
 
 
-std::vector<std::string> AbstractAlgorithm::PrepareKernels(KernelRequest *kernels, asizei numKernels, AbstractSpecialValuesProvider &special) {
+std::vector<std::string> AbstractAlgorithm::PrepareKernels(KernelRequest *kernels, asizei numKernels, AbstractSpecialValuesProvider &special, const std::string &loadPath) {
     // First of all, let's build a set of unique file names. Some algorithms load up the same file more than once.
     // Those are usually very few entries so it's probably faster using an array but set is easier.
     std::map<std::string, std::string> load;
     std::vector<char> source;
     std::vector<std::string> errors;
     for(auto k = kernels; k < kernels + numKernels; k++) {
-        if(load.find(k->fileName) != load.end()) continue;
+        const auto name = loadPath + k->fileName;
+        if(load.find(name) != load.end()) continue;
         auto newKern = load.insert(std::make_pair(k->fileName, std::string())).first;
 
-        std::ifstream disk(newKern->first, std::ios::binary);
+        std::ifstream disk(name, std::ios::binary);
         if(disk.is_open() == false) {
-            errors.push_back(std::string("Could not open \"") + newKern->first + '"');
+            errors.push_back(std::string("Could not open \"") + name + '"');
             continue;
         }
         disk.seekg(0, std::ios::end);
         auto size = disk.tellg();
         if(size >= 1024 * 1024 * 8) {
-            errors.push_back(std::string("Kernel source in \"") + newKern->first + "\" is too big, measures " + std::to_string(size) + " bytes!");
+            errors.push_back(std::string("Kernel source in \"") + name + "\" is too big, measures " + std::to_string(size) + " bytes!");
             continue;
         }
         source.resize(asizei(size) + 1);

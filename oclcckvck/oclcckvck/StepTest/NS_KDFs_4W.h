@@ -66,14 +66,14 @@ struct NS_FirstKDF_4W : public AbstractAlgorithm {
     NS_FirstKDF_4W(cl_context ctx, cl_device_id dev, asizei concurrency)
         : AbstractAlgorithm(concurrency, ctx, dev, "NS_FirstKDF", "4-way", "v1", 0) { }
 
-    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
+    std::vector<std::string> Init(ConfigDesc *desc, AbstractSpecialValuesProvider &specials, const std::string &loadPathPrefix) {
         ResourceRequest resources[] = {
             ResourceRequest("buffA", CL_MEM_HOST_READ_ONLY, (256 + 64) * hashCount),
             ResourceRequest("buffB", CL_MEM_HOST_READ_ONLY, (256 + 32) * hashCount),
             ResourceRequest("kdfResult", CL_MEM_HOST_READ_ONLY, 256 * hashCount),
             Immediate<cl_uint>("KDF_CONST_N", 32),
         };
-        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), specials));
         if(errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
@@ -84,7 +84,7 @@ struct NS_FirstKDF_4W : public AbstractAlgorithm {
                 "$wuData, kdfResult, KDF_CONST_N, buffA, buffB"
             }
         };
-        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials, loadPathPrefix);
     }
     bool BigEndian() const { return false; }
 
@@ -152,6 +152,7 @@ struct NS_FirstKDF_4W : public AbstractAlgorithm {
         if(startX) clEnqueueUnmapMemObject(cq, startX, startX, 0, NULL, NULL);
         blobA = blobB = blobStartX = nullptr;
     }
+    aulong GetDifficultyNumerator() const { return 0; } // unused, not a real mining algo
 };
 
 
@@ -173,7 +174,7 @@ struct NS_LastKDF_4W : public AbstractAlgorithm {
         for(auto &i : xi) i = random();
     }
 
-    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
+    std::vector<std::string> Init(ConfigDesc *desc, AbstractSpecialValuesProvider &specials, const std::string &loadPathPrefix) {
         ResourceRequest resources[] = {
             ResourceRequest("buffA", CL_MEM_HOST_NO_ACCESS, (256 + 64) * hashCount, buffA.data()),
             ResourceRequest("buffB", CL_MEM_HOST_NO_ACCESS, (256 + 32) * hashCount, buffB.data()),
@@ -182,7 +183,7 @@ struct NS_LastKDF_4W : public AbstractAlgorithm {
             ResourceRequest("pad", CL_MEM_HOST_NO_ACCESS, 256 * hashCount),
             Immediate<cl_uint>("KDF_CONST_N", 32),
         };
-        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), specials));
         if(errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
@@ -193,7 +194,7 @@ struct NS_LastKDF_4W : public AbstractAlgorithm {
                 "$candidates, $dispatchData, xo, xi, KDF_CONST_N, buffA, buffB, pad"
             }
         };
-        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials, loadPathPrefix);
     }
     bool BigEndian() const { return true; }
 
@@ -216,6 +217,7 @@ struct NS_LastKDF_4W : public AbstractAlgorithm {
         const auint *dword = reinterpret_cast<const auint*>(final.data());
         return (aulong(dword[7]) << 32) | dword[6];
     }
+    aulong GetDifficultyNumerator() const { return 0; } // unused, not a real mining algo
 };
 
 

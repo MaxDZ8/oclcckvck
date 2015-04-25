@@ -16,6 +16,14 @@
 #include <fstream>
 #include "../Common/hashing.h"
 #include "AbstractSpecialValuesProvider.h"
+#include <limits>
+
+#if defined(max)
+// This silly macro will prevent me to do std::numeric_limits<>::max. Good!
+#pragma push_macro("max")
+#undef max
+#define MAX_MACRO_PUSHED
+#endif
 
 
 //! This enumeration is used by AbstractAlgorithm::Tick to represent the internal state and tell the outer code what to do.
@@ -80,10 +88,34 @@ public:
     Represents the specific algorithm-implementation and version. Computed as a side effect of PrepareKernels, which is supposed to be called by Init(). */
     aulong GetVersioningHash() const { return aiSignature; }
 
+
+    /*! When initialized, algorithms can optionally provide information about what they're initializing so the user can understand what's going on.
+    In that case, Init() will allocate nothing and exit early. */
+    struct ConfigDesc {
+        aulong hashCount;
+        enum AddressSpace {
+            as_device,
+            as_host
+        };
+        struct MemDesc {
+            AddressSpace memoryType;
+            std::string presentation;
+            auint bytes;
+            explicit MemDesc() : memoryType(as_device), bytes(0) { }
+        };
+        std::vector<MemDesc> memUsage;
+        explicit ConfigDesc() : hashCount(0) { }
+    };
+
     /*! Performs all the heavy duty required to create the resources to run the algorithm. Returns a list of all errors encountered.
     Those are really errors, so if something non-empty is returned you should bail out.
-    Call this immediately after CTOR. Must be called before Tick, GetEvents, GetResults, GetVersioningHash. */
-    virtual std::vector<std::string> Init(AbstractSpecialValuesProvider &specialValues) = 0;
+    Call this immediately after CTOR. Must be called before Tick, GetEvents, GetResults, GetVersioningHash.
+    Providing a pointer to a valid ConfigDesc object degenerates this to something akin to NOP. The call might perform different validation and
+    WILL NOT initialize anything for real. In particular, it does not allocate resources. It is therefore valid to call Init multiple times with
+    a ConfigDesc object, even after a successful call to Init(nullptr, ...). Nonetheless, Init(nullptr, ....) cannot be called again after one
+    successful execution.
+    \note The easiest way to implement this is to call DescribeResources and return before PrepareResources. */
+    virtual std::vector<std::string> Init(ConfigDesc *desc, AbstractSpecialValuesProvider &specialValues, const std::string &loadPathPrefix) = 0;
 
     //! If this returns true you're supposed to not dispatch any more work but rather upload new hash data and restart scanning hashes from 0.
     bool Overflowing() const { return nonceBase + hashCount > std::numeric_limits<auint>::max(); };
@@ -99,6 +131,10 @@ public:
     void RunAlgorithm(cl_command_queue q, asizei amount);
 
     void Restart(asizei nonceStart = 0) { nonceBase = nonceStart; }
+
+    /*! Returns a value used to compute network difficulty. This can be called by multiple threads so it must be re-entrant,
+    not much of a big deal as it's usually just returning a constant. */
+    virtual aulong GetDifficultyNumerator() const = 0;
 
 protected:
     struct WorkGroupDimensionality {
@@ -179,13 +215,16 @@ protected:
         : identifier(algo, imp, ver), context(ctx), device(dev), hashCount(numHashes), uintsPerHash(candHashUints) {
     }
 
+    /*! Allow user to estimate memory footprint without allocating real memory. */
+    std::vector<std::string> DescribeResources(ConfigDesc &desc, ResourceRequest *resources, asizei numResources, const AbstractSpecialValuesProvider &specialValues) const;
+
     /*! Derived classes are expected to call this somewhere in their ctor. It deals with allocating memory and eventually initializing it in a
     data-driven way. Note special resources cannot be created using this, at least in theory. Just create them in the ctor before PrepareKernels. 
     While this is allowed to throw, it is suggested to produce a list of errors to be returned by Init(). */
-    std::vector<std::string> PrepareResources(ResourceRequest *resources, asizei numResources, asizei hashCount, const AbstractSpecialValuesProvider &specialValues);
+    std::vector<std::string> PrepareResources(ResourceRequest *resources, asizei numResources, const AbstractSpecialValuesProvider &specialValues);
 
     //! Similarly, kernels are described by data and built by resolving the previously declared resources. Device used to pull out eventual error logs.
-    std::vector<std::string> PrepareKernels(KernelRequest *kernels, asizei numKernels, AbstractSpecialValuesProvider &specialValues);
+    std::vector<std::string> PrepareKernels(KernelRequest *kernels, asizei numKernels, AbstractSpecialValuesProvider &specialValues, const std::string &loadPathPrefix);
 
     struct KernelDriver : WorkGroupDimensionality {
         cl_kernel clk;
@@ -216,3 +255,8 @@ private:
     required to uniquely identify what's going to be run. */
     aulong ComputeVersionedHash(const KernelRequest *kerns, asizei numKernels, const std::map<std::string, std::string> &src) const;
 };
+
+#if defined MAX_MACRO_PUSHED
+#pragma pop_macro("max")
+#undef MAX_MACRO_PUSHED
+#endif

@@ -13,7 +13,7 @@ public:
     MYRGRSMonolithicCL12(cl_context ctx, cl_device_id dev, asizei concurrency)
         : AbstractAlgorithm(concurrency, ctx, dev, "GRSMYR", "monolithic", "v1", 8) { }
 
-    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
+    std::vector<std::string> Init(ConfigDesc *desc, AbstractSpecialValuesProvider &specials, const std::string &loadPathPrefix) {
         auint roundCount[5] = {
             14, 14, 14, // groestl rounds
             2, 3 // SHA rounds
@@ -22,7 +22,8 @@ public:
             ResourceRequest("roundCount", CL_MEM_HOST_NO_ACCESS | CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(roundCount), roundCount)
         };
         resources[0].presentationName = "Round iterations";
-        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        if(desc) return DescribeResources(*desc, resources, sizeof(resources) / sizeof(resources[0]), specials);
+        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), specials));
         if(errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
@@ -33,9 +34,10 @@ public:
                 "$candidates, $wuData, $dispatchData, roundCount"
             }
         };
-        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials, loadPathPrefix);
     }
     bool BigEndian() const { return true; }
+    aulong GetDifficultyNumerator() const { return 0x000000000000FFFFull; }
 };
 
 }

@@ -43,6 +43,12 @@ public:
             const TestRun &block(headers.first[bindex]);
             std::array<aubyte, 80> header;
             for(asizei cp = 0; cp < sizeof(header); cp++) header[cp] = block.clData[cp];
+            if(dispatch.algo.BigEndian()) {
+                for(asizei i = 0; i < sizeof(header); i += 4) {
+                    std::swap(header[i + 0], header[i + 3]);
+                    std::swap(header[i + 1], header[i + 2]);
+                }
+            }
             dispatch.BlockHeader(header);
             dispatch.TargetBits(block.targetBits);
             dispatch.algo.Restart();
@@ -54,6 +60,7 @@ public:
                 Mangle(candidates, dispatch, thisScan);
                 remHashes -= thisScan;
             }
+            if(onBlockHashed) onBlockHashed(bindex);
             if(candidates.size() != block.numResults) {
                 string msg("BAD RESULT COUNT for test block [");
                 msg += to_string(bindex) + "]: " + to_string(block.numResults) + " expected, got " + to_string(candidates.size());
@@ -86,7 +93,6 @@ public:
                 msg += to_string(bindex) + "]: " + to_string(mismatch) + " nonce values not matched.";
                 errorMessages.push_back(msg);
             }
-            if(onBlockHashed) onBlockHashed(bindex);
         }
         return errorMessages;
     }
@@ -110,23 +116,22 @@ protected:
             //! if(algo.dynamicIntensity) everything is fine, algo can adapt
             throw std::string("Probably forgot to call CanRunTests first!");
         }
-        std::vector<cl_event> blockers;
         bool completed = false;
         cl_int ret = 0;
+        std::set<cl_event> trigger;
         while(!completed) {
-            auto ev(dispatch.Tick(blockers));
-            blockers.clear();
+            auto ev(dispatch.Tick(trigger));
             switch(ev) {
             case AlgoEvent::dispatched: break; // how can I use this?
             case AlgoEvent::exhausted: throw "Impossible! Test data inconsistent!"; // Test data enumerates all the headers so this cannot happen
-            case AlgoEvent::working:
+            case AlgoEvent::working: {
+                std::vector<cl_event> blockers;
                 dispatch.GetEvents(blockers); // in this case I can just wait here. This is not always possible.
                 ret = clWaitForEvents(cl_uint(blockers.size()), blockers.data());
-                /*! \todo clWaitForEvents returns when ALL the events have completed!
-                This is ridiculous, instead I should pick all the events, associate a callback to them - which means I have to remember which events
-                have been already associated and have the callback set an event over which I can sleep. Freaking nonsense.
-                For the time being I have no such issue since I test one device at time. */
-                break;
+                for(auto ev : blockers) {
+                    if(trigger.find(ev) == trigger.cend()) trigger.insert(ev);
+                }
+            } break;
             case AlgoEvent::results:
                 completed = true;
                 break;

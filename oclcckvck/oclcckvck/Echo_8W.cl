@@ -233,7 +233,8 @@ kernel void Echo_8way(global uint2 *input, global uint2 *hashOut, global uint *a
             uint storage = atomic_inc(found);
 			passhi[get_local_size(1) + get_local_id(1)] = storage;
 			// Now passing out the whole hash as well as nonce for extra checking
-            found[storage * 17 + 1] = as_uint(as_char4(get_global_id(1)).wzyx); // watch out for endianess!
+            const uint nonce = (uint)(get_global_id(1));
+            found[storage * 17 + 1] = as_uint(as_char4(nonce).wzyx); // watch out for endianess!
         }
     }
 	barrier(CLK_LOCAL_MEM_FENCE);

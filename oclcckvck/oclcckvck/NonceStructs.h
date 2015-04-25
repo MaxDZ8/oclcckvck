@@ -35,3 +35,25 @@ struct MinedNonces {
     explicit MinedNonces() = default;
     MinedNonces(const std::array<aubyte, 80> &hashOriginator) : from(hashOriginator) { }
 };
+
+
+/*! Nonces produced by a certain device and passed out to control/send thread.
+The fact nonces were found does not imply they are going to be sent... nor there is something to send.
+Nonces might be discarded for being under target or hardware miscomputing. */
+struct VerifiedNonces {
+    asizei discarded; //!< those nonces were valid but won't be returned as below target, would get rejected. We have been unlucky.
+    asizei wrong; //!< those nonces produce hashes not matching across GPU and CPU validation. Also called "HW" error. Most likely not a transient error.
+    auint nonce2; //!< common to all nonces, assuming nonces.length() > 0, otherwise undefined
+    struct Nonce {
+        auint nonce; //!< the magic number to send
+        std::array<aubyte, 4> hashSlice; //!< slice of the produced hash, for feedback when legacy compatibility requested
+        adouble diff; //!< difficulty of this specific share, again for feedback mostly
+        bool block; //!< true if this exceeds network difficulty and thus solved a block
+        Nonce() : nonce(0), diff(.0), block(false) { }
+    };
+    std::vector<Nonce> nonces;
+    asizei device; //!< device which produced the nonces for running statistics
+    adouble targetDiff; //!< target diff used for the scan which produced this set of nonces.
+    VerifiedNonces() : discarded(0), wrong(0) { }
+    asizei Total() const { return discarded + wrong + nonces.size(); }
+};

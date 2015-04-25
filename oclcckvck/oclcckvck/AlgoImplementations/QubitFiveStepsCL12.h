@@ -13,7 +13,7 @@ public:
     QubitFiveStepsCL12(cl_context ctx, cl_device_id dev, asizei concurrency)
         : AbstractAlgorithm(concurrency, ctx, dev, "Qubit", "fiveSteps", "v1", 16) { }
 
-    std::vector<std::string> Init(AbstractSpecialValuesProvider &specials) {
+    std::vector<std::string> Init(ConfigDesc *desc, AbstractSpecialValuesProvider &specials, const std::string &loadPathPrefix) {
         const asizei passingBytes = this->hashCount * 16 * sizeof(cl_uint);
         KnownConstantProvider K; // all the constants are fairly nimble so I don't save nor optimize this in any way!
         auto AES_T_TABLES(K[CryptoConstant::AES_T]);
@@ -33,7 +33,8 @@ public:
 
         resources[4].presentationName = "SIMD &alpha; table";
         resources[5].presentationName = "SIMD &beta; table";
-        std::vector<std::string> errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), hashCount, specials));
+        if(desc) return DescribeResources(*desc, resources, sizeof(resources) / sizeof(resources[0]), specials);
+        auto errors(PrepareResources(resources, sizeof(resources) / sizeof(resources[0]), specials));
         if(errors.size()) return errors;
 
         typedef WorkGroupDimensionality WGD;
@@ -64,9 +65,10 @@ public:
                 "io1, $candidates, $dispatchData, AES_T_TABLES"
             }
         };
-        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials);
+        return PrepareKernels(kernels, sizeof(kernels) / sizeof(kernels[0]), specials, loadPathPrefix);
     }
     bool BigEndian() const { return true; }
+    aulong GetDifficultyNumerator() const { return 0x0000000000FFFFFFull; }
 };
 
 }

@@ -6,6 +6,7 @@
 #pragma once
 #include "AbstractAlgorithm.h"
 #include "AbstractSpecialValuesProvider.h"
+#include <set>
 
 /*! The stop-n-wait dispatcher takes an algorithm and uses it to drive the GPU 1 unit of work at time.
 It dispatches data and waits for result. It is basically the same thing M8M always did, which is very similar to legacy miners.
@@ -47,25 +48,20 @@ public:
     void BlockHeader(const std::array<aubyte, 80> &header) { blockHeader = header; }
     void TargetBits(aulong reference) { targetBits = reference; }
 
-    AlgoEvent Tick(const std::vector<cl_event> &blockers) {
+    //! Tries to evolve algorithm state. The only thing that prevents an algorithm to evolve is completion of the mapping operations.
+    //! \param [in,out] blockers contains a list of events representing completed operations. If the event I'm waiting for is in the set,
+    //! I will remove it from the set of waiting events.
+    AlgoEvent Tick(std::set<cl_event> &blockers) {
         // The first, most important thing to do is to free results so I can start again.
         if(mapping) {
-            if(std::find(blockers.cbegin(), blockers.cend(), mapping) == blockers.cend()) return AlgoEvent::working;
+            if(blockers.find(mapping) == blockers.cend()) return AlgoEvent::working;
+            blockers.erase(mapping);
             return AlgoEvent::results;
         }
         if(algo.Overflowing()) return AlgoEvent::exhausted; // nothing to do
 
         cl_int err = 0;
-        if(algo.BigEndian()) {
-            aubyte be[80];
-            for(asizei i = 0; i < sizeof(be); i += 4) {
-                for(asizei cp = 0; cp < 4; cp++) be[i + cp] = blockHeader[i + 3 - cp];
-            }
-            err = clEnqueueWriteBuffer(queue, wuData, CL_TRUE, 0, sizeof(be), be, 0, NULL, NULL);
-        }
-        else {
-            err = clEnqueueWriteBuffer(queue, wuData, CL_TRUE, 0, sizeof(blockHeader), blockHeader.data(), 0, NULL, NULL);
-        }
+        err = clEnqueueWriteBuffer(queue, wuData, CL_TRUE, 0, sizeof(blockHeader), blockHeader.data(), 0, NULL, NULL);
         if(err != CL_SUCCESS) throw std::string("CL error ") + std::to_string(err) + " while attempting to update $wuData";
 
         cl_uint buffer[5]; // taken as is from M8M FillDispatchData... how ugly!
@@ -96,7 +92,11 @@ public:
 
 
     MinedNonces GetResults() {
-        const asizei count = *nonces;
+        asizei count = *nonces;
+        if(count > maxResults) {
+            //! \todo Resize buffer for next time! This isn't very likely anyway as more results --> higher diff --> less results
+            count = maxResults;
+        }
         MinedNonces ret(dispatchedHeader);
         ret.hashes.reserve(count * algo.uintsPerHash);
         ret.nonces.reserve(count);
@@ -126,6 +126,11 @@ public:
     //! This is needed mainly for testing. No real need to have it there but more private stuff.
     cl_command_queue GetQueue() const { return queue; }
 
+    //! Returns true if the header **might** be returned by a future call to GetResults
+    bool IsInFlight(const std::array<aubyte, 80> &test) {
+        return test == dispatchedHeader || test == blockHeader;
+    }
+
 private:
     cl_mem wuData = 0, dispatchData = 0;
     cl_mem candidates = 0;
@@ -136,6 +141,7 @@ private:
     std::array<aubyte, 80> dispatchedHeader; //!< block dispatched to last RunAlgorithm
     std::array<aubyte, 80> blockHeader; //!< block to dispatch at NEXT RunAlgorithm!
     aulong targetBits;
+    asizei maxResults = 0;
 
     void PrepareIOBuffers(cl_context context, asizei hashCount){
         cl_int error;
@@ -149,6 +155,7 @@ private:
         byteCount = hashCount / (16 * 1024);
         //! \todo pull the whole hash down so I can check mismatches
         if(byteCount < 32) byteCount = 32;
+        maxResults = byteCount;
         byteCount *= sizeof(cl_uint) * (1 + algo.uintsPerHash);
         byteCount += 4; // initial candidate count
         nonceBufferSize = byteCount;
